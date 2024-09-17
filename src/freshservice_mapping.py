@@ -122,19 +122,18 @@ def save_csv(df, output_file_path):
     df.to_csv(output_file_path, index=False)
     print(f'Cleaned and flattened CSV saved to {output_file_path}')
 
-# Main function to orchestrate the steps
 def process_csv(input_file_path, output_file_path, departments_file_path=None, vendors_file_path=None, requesters_file_path=None, asset_types_file_path=None, column_name='type_fields'):
     """
     Load a CSV, flatten the type_fields column, clean column names, apply mappings, and save the result.
     Handles missing datasets gracefully.
 
     Args:
-        input_file_path (Path): Path to the input CSV file (using pathlib).
-        output_file_path (Path): Path to save the processed CSV file (using pathlib).
-        departments_file_path (Path or None): Path to the departments CSV file (using pathlib).
-        vendors_file_path (Path or None): Path to the vendors CSV file (using pathlib).
-        requesters_file_path (Path or None): Path to the requesters CSV file (using pathlib).
-        asset_types_file_path (Path or None): Path to the asset types CSV file (using pathlib).
+        input_file_path (Path): Path to the input CSV file.
+        output_file_path (Path): Path to save the processed CSV file.
+        departments_file_path (Path or None): Path to the departments CSV file.
+        vendors_file_path (Path or None): Path to the vendors CSV file.
+        requesters_file_path (Path or None): Path to the requesters CSV file.
+        asset_types_file_path (Path or None): Path to the asset types CSV file.
         column_name (str): The name of the column to flatten. Default is 'type_fields'.
     """
     # Step 1: Load the assets CSV file
@@ -158,14 +157,23 @@ def process_csv(input_file_path, output_file_path, departments_file_path=None, v
     # Step 6: Save the cleaned, flattened, and mapped DataFrame to a CSV file
     save_csv(df_mapped, output_file_path)
 
-# Example usage
 if __name__ == "__main__":
-    input_file_path = Path('./data/assets_data.csv')  # Use Path from pathlib to define the file path
-    output_file_path = Path('./data/assets_data_flattened_cleaned.csv')
-    departments_file_path = Path('./data/departments_data.csv')
-    vendors_file_path = Path('./data/vendors_data.csv')
-    requesters_file_path = Path('./data/requesters_data.csv')
-    asset_types_file_path = Path('./data/asset_types_data.csv')
+    # This block allows the script to run standalone
+    base_dir = Path(__file__).resolve().parent.parent  # Go two levels up from the script file
+    data_dir = base_dir / "data"
 
-    # Run the process
-    process_csv(input_file_path, output_file_path, departments_file_path, vendors_file_path, requesters_file_path, asset_types_file_path)
+    input_file_path = data_dir / "assets_data.csv"
+    output_file_path = data_dir / "assets_data_flattened_cleaned.csv"
+    departments_file_path = data_dir / "departments_data.csv"
+    vendors_file_path = data_dir / "vendors_data.csv"
+    requesters_file_path = data_dir / "requesters_data.csv"
+    asset_types_file_path = data_dir / "asset_types_data.csv"
+
+    process_csv(
+        input_file_path,
+        output_file_path,
+        departments_file_path,
+        vendors_file_path,
+        requesters_file_path,
+        asset_types_file_path
+    )

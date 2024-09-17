@@ -1,7 +1,6 @@
 import pandas as pd
 from pathlib import Path
 
-# Function to load the CSV file
 def load_csv(filepath):
     """Loads a CSV file into a pandas DataFrame."""
     file_path = Path(filepath)
@@ -11,21 +10,18 @@ def load_csv(filepath):
     else:
         raise FileNotFoundError(f"The file {file_path} does not exist or is not a CSV file.")
 
-# Function to filter active employees and keep relevant columns
 def filter_active_employees(df):
     """Filters the DataFrame to include only rows with 'Active' status."""
     print("Filtering active employees...")
     active_df = df[df['Status'] == 'Active'][['First Name', 'Last Name']].copy()
     return active_df
 
-# Function to add full name column
 def add_full_name(df):
     """Adds a 'Full Name' column by combining 'First Name' and 'Last Name'."""
     print("Adding 'Full Name' column...")
     df['Full Name'] = df['First Name'] + ' ' + df['Last Name']
     return df
 
-# Function to save the modified DataFrame to a CSV file
 def save_to_csv(df, output_filepath):
     """Saves the DataFrame to a CSV file."""
     output_path = Path(output_filepath)
@@ -33,7 +29,6 @@ def save_to_csv(df, output_filepath):
     df.to_csv(output_path, index=False)
     print(f"Data saved successfully to {output_path}")
 
-# Main function to process the data
 def process_headcount_data(input_filepath, output_filepath):
     """Main function to load, filter, process, and save headcount data."""
     # Load the CSV file
@@ -48,14 +43,25 @@ def process_headcount_data(input_filepath, output_filepath):
     # Save the result to a new CSV file
     save_to_csv(active_employees_df, output_filepath)
 
-# Example usage
-if __name__ == "__main__":
-    # Reference the current script directory using Path(__file__)
-    base_dir = Path(__file__).resolve().parent.parent  # Go two levels up from the script file (ppe/ppe/..)
+def main(data_dir=None):
+    """
+    Main function to process headcount data.
+    If data_dir is not provided, it uses a default path.
+    """
+    if data_dir is None:
+        # Use a default path relative to the script location
+        base_dir = Path(__file__).resolve().parent.parent
+        data_dir = base_dir / "data"
+    else:
+        data_dir = Path(data_dir)
 
-    # Define input and output file paths relative to the project directory
-    input_file = base_dir / "data" / "headcount_data.csv"  # Path to your input CSV file inside the data folder
-    output_file = base_dir / "data" / "filtered_active_employees.csv"  # Path to save the output CSV file
+    # Ensure the data directory exists
+    data_dir.mkdir(parents=True, exist_ok=True)
 
-    # Call the main function to process the data
+    input_file = data_dir / "headcount_data.csv"
+    output_file = data_dir / "filtered_active_employees.csv"
+
     process_headcount_data(input_file, output_file)
+
+if __name__ == "__main__":
+    main()  # This will use the default data directory when run standalone

@@ -8,7 +8,6 @@ import json
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-# Function to load environment variables
 def load_env_variables():
     """Load environment variables from the .env file."""
     load_dotenv()
@@ -174,24 +173,20 @@ def save_unified_dataframe(df, filename, data_dir):
     df.to_csv(output_path, index=False)
     print(f"Unified data saved to {output_path}")
 
-# Main function to orchestrate the steps
-def main():
+def main(data_dir):
     # Step 1: Load environment variables
     env_vars = load_env_variables()
 
-    # Step 2: Ensure the 'data' directory exists
-    data_dir = ensure_data_dir()
-
-    # Step 3: Create the API headers
+    # Step 2: Create the API headers
     headers = create_headers(env_vars['FRESHSERVICE_API_KEY'])
 
-    # Step 4: Initialize the session with retry logic
+    # Step 3: Initialize the session with retry logic
     session = configure_retry_session()
 
     # Set the Freshservice base URL
     base_url = f"https://{env_vars['FRESHSERVICE_DOMAIN']}/api/v2/"
 
-    # Step 5: Download asset data and other datasets
+    # Step 4: Download asset data and other datasets
     asset_df = download_data('assets?include=type_fields&order_by=created_at&order_type=asc', 'assets_data.csv', base_url, headers, data_dir, session)
     download_data('requesters', 'requesters_data.csv', base_url, headers, data_dir, session)
     download_data('agents', 'agents_data.csv', base_url, headers, data_dir, session)
@@ -200,14 +195,13 @@ def main():
     download_data('asset_types', 'asset_types_data.csv', base_url, headers, data_dir, session)
     download_data('departments', 'departments_data.csv', base_url, headers, data_dir, session)
 
-    # Step 6: Define what additional data to fetch for each asset
+    # Step 5: Define what additional data to fetch for each asset
     additional_data_types = ["components", "requests", "contracts", "relationships"]
 
-    # Step 7: Create a unified dataframe with additional data and save it
+    # Step 6: Create a unified dataframe with additional data and save it
     if asset_df is not None:
         unified_df = create_unified_dataframe(asset_df, additional_data_types, base_url, headers, session)
         save_unified_dataframe(unified_df, 'assets_data_associates.csv', data_dir)
 
-# Run the script
 if __name__ == "__main__":
-    main()
+    main(Path("./data"))  # This line won't be used when called from the main orchestrator
