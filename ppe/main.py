@@ -1,45 +1,35 @@
-import os
+import sys
 from pathlib import Path
-import subprocess
 
-# Define the project directories
-base_dir = Path(__file__).resolve().parent  # Go to the base directory
-data_dir = base_dir / "data"
+# Add the parent directory to the system path to access the 'ppe' module
+base_dir = Path(__file__).resolve().parent.parent  # Adjust this to point to the correct directory
+sys.path.append(str(base_dir))
 
-# Step 1: Run Freshservice data processing
+from ppe.freshservice_data import main as freshservice_main
+from ppe.freshservice_mapping import process_csv as freshservice_mapping
+from ppe.airtable_data import main as airtable_main
+from ppe.headcount_processing import process_headcount_data
+
 def run_freshservice_data():
     print("\n=== Step 1: Running Freshservice Data Fetching ===\n")
-    subprocess.run(["python3", str(base_dir / "ppe" / "freshservice_data.py")], check=True)
+    freshservice_main()
 
-# Step 2: Run Freshservice data mapping
 def run_freshservice_mapping():
     print("\n=== Step 2: Running Freshservice Mapping ===\n")
-    freshservice_mapping_script = base_dir / "ppe" / "freshservice_mapping.py"
-    # Here, you can run the Python script as a subprocess or import and call its main function.
-    subprocess.run(["python3", str(freshservice_mapping_script)], check=True)
+    freshservice_mapping()
 
-# Step 3: Run Airtable data processing
 def run_airtable_data():
     print("\n=== Step 3: Running Airtable Data Fetching ===\n")
-    subprocess.run(["python3", str(base_dir / "ppe" / "airtable_data.py")], check=True)
+    airtable_main()
 
-# Step 4: Run headcount processing
 def run_headcount_processing():
     print("\n=== Step 4: Running Headcount Data Processing ===\n")
-    subprocess.run(["python3", str(base_dir / "ppe" / "headcount_processing.py")], check=True)
+    process_headcount_data()
 
-# Orchestrate the workflow
 def main():
-    # Step 1: Freshservice data
     run_freshservice_data()
-
-    # Step 2: Mapping and cleaning Freshservice data
     run_freshservice_mapping()
-
-    # Step 3: Airtable data
     run_airtable_data()
-
-    # Step 4: Process headcount data
     run_headcount_processing()
 
 if __name__ == "__main__":
