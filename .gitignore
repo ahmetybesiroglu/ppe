@@ -165,10 +165,3 @@ cython_debug/
 
 # PyCharm
 .idea/
-
-# Data folder
-data/
-
-
-# Notebooks folder
-notebooks/
