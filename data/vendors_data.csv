@@ -1,0 +1,119 @@
+address,id,name,description,contact_name,email,mobile,phone,primary_contact_id,custom_fields,created_at,updated_at
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000394515,Adobe,,,,,,,{},2023-09-07T13:51:31Z,2023-09-07T13:51:31Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392095,Adobe Inc.,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000394514,Adobe Systems Incorporated,,,,,,,{},2023-09-07T13:51:31Z,2023-09-07T13:51:31Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000393391,AdvisoryCloud,,,,,,,{},2023-08-29T19:44:34Z,2023-08-29T19:44:34Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000273449,Aircall ,,Nidhi Khandekar,nidhi.khandekar@aircall.io,,,,{},2022-11-30T21:11:25Z,2023-06-09T20:16:11Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000274798,Airtable ,,Jonathan Prichard ,jonathan.prichard@airtable.com,,,,{},2022-12-05T14:54:26Z,2022-12-05T14:54:26Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392106,Alkemi,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000393763,Amazon Web Service,,,,,,,{},2023-08-31T18:09:21Z,2023-08-31T18:09:21Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000393885,Amazon Web Services,,,,,,,{},2023-09-01T16:26:35Z,2023-09-01T16:26:35Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000400899,AMPLITUDE Studios,,,,,,,{},2023-10-19T21:23:48Z,2023-10-19T21:23:48Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392082,Anneka Tran,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000393765,Apify,,,,,,,{},2023-08-31T18:12:23Z,2023-08-31T18:12:23Z
+"{'line1': None, 'city': 'New York ', 'state': 'California', 'country': 'United States', 'zipcode': None}",20000035083,Apple,,Stephen Labiak,labiak@apple.com,(737)219-6563,(212)-625-6338,,{},2022-02-17T20:44:50Z,2023-12-11T17:17:53Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000393767,Artia,,,,,,,{},2023-08-31T18:17:23Z,2023-08-31T18:17:23Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000393769,Artlist,,,,,,,{},2023-08-31T18:22:45Z,2023-08-31T18:22:45Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000393771,Artnet,,,,,,,{},2023-08-31T18:40:17Z,2023-08-31T18:40:17Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000393772,ARTPRICE.COM,,Support@Artprice.com,,,,,{},2023-08-31T18:44:14Z,2023-08-31T18:44:14Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000393775,Atlassian,,,,,,,{},2023-08-31T18:49:59Z,2023-08-31T18:49:59Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000393776,Audible,,,,,,,{},2023-08-31T18:52:44Z,2023-08-31T18:52:44Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000393777,Basecamp,,,,,,,{},2023-08-31T18:55:59Z,2023-08-31T18:55:59Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000393778,Beeroll,,,,,,,{},2023-08-31T19:00:12Z,2023-08-31T19:00:12Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000393798,"Betterment for Business, LLC",,ar@bettermentforbusiness.com,,,,,{},2023-08-31T19:02:14Z,2023-08-31T19:02:14Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000393799,Bill.com,,support@hq.bill.com,,,,,{},2023-08-31T19:05:27Z,2023-08-31T19:05:27Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000393800,Bitly,,support@bitly.com,,,,,{},2023-08-31T19:10:49Z,2023-08-31T19:10:49Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000393801,Bloomberg,,,,,,,{},2023-08-31T19:18:28Z,2023-08-31T19:18:28Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000393807,Braze Inc.,,ar@braze.com,,,,,{},2023-08-31T20:19:57Z,2023-08-31T20:19:57Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000393813,Breezy,,Support@breezyhr.com,,,,,{},2023-08-31T21:00:27Z,2023-08-31T21:00:27Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392085,BrightSign,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000393816,Business Insider,,,,,,,{},2023-08-31T21:02:38Z,2023-08-31T21:02:38Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000393873,Calendly,,Support@calendly.com,,,,,{},2023-09-01T14:45:45Z,2023-09-01T14:45:45Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000393874,Canva,,,,,,,{},2023-09-01T14:48:20Z,2023-09-01T14:48:20Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000409926,"CAPCOM Co., Ltd.",,,,,,,{},2023-12-21T17:01:44Z,2023-12-21T17:01:44Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000393875,Capture One,,ordersupport@captureone.com,,,,,{},2023-09-01T14:49:43Z,2023-09-01T14:49:43Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000393876,Carta,,support@carta.com,,,,,{},2023-09-01T14:55:50Z,2023-09-01T14:55:50Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000393881,Clarifai API,,ar@clarifai.com,,,,,{},2023-09-01T15:57:36Z,2023-09-01T15:57:36Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000393882,Cleverbridge,,support@cleverbridge.com,,,,,{},2023-09-01T15:59:06Z,2023-09-01T15:59:06Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000393883,Clickfunnels,,,,,,,{},2023-09-01T16:01:31Z,2023-09-01T16:01:31Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000440601,"Cloudflare, Inc.",,,,,,,{},2024-07-25T19:24:32Z,2024-07-25T19:24:32Z
+"{'line1': 'Clutch Solutions LLC \r\n1 Technology DR\r\nSwedesboro', 'city': '', 'state': '', 'country': '', 'zipcode': ''}",20000233604,Clutch Solutions ,Hardware/Software Vendor ,Mike Ward ,mike.ward@clutchsolutions.com,773-987-8439,480-900-6934,,{},2022-09-06T14:17:55Z,2022-09-06T14:17:55Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392098,"CrowdStrike, Inc.",,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000407789,CyberConnect2,,,,,,,{},2023-12-08T18:01:29Z,2023-12-08T18:01:29Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000412627,Daniel Mullins Games,,,,,,,{},2024-01-11T15:07:38Z,2024-01-11T15:07:38Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392111,Deadpan Games,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': '1 Dell Way', 'city': 'Round Rock', 'state': 'Texas', 'country': 'United States', 'zipcode': '78664'}",20000035084,Dell,,,,,,,{},2022-02-17T20:44:50Z,2022-02-17T20:44:50Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392088,Dell Inc.,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000409921,Demagog Studio,,,,,,,{},2023-12-21T16:31:23Z,2023-12-21T16:31:23Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392109,Dinosaur Polo Club,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000433006,DisplayLink Corp.,,,,,,,{},2024-05-14T16:04:30Z,2024-05-14T16:04:30Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000415993,Docker Inc.,,,,,,,{},2024-02-07T21:31:44Z,2024-02-07T21:31:44Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000393393,Dropbox,,,,,,,{},2023-08-29T19:53:42Z,2023-08-29T19:53:42Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392101,FileWave,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392102,ForensiT,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392093,Freshdesk,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': '2950 S Delaware St Suite 201', 'city': 'San Mateo', 'state': 'California', 'country': 'United States', 'zipcode': '94401'}",20000035086,Freshworks,,Vinodh Subramanian ,vinodh.subramanian@freshworks.com,,,,{},2022-02-17T20:44:50Z,2022-09-20T21:11:16Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000400562,Galvanic Games,,,,,,,{},2023-10-17T18:27:41Z,2023-10-17T18:27:41Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392097,GN Audio A/S,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392100,GN Netcom A/S,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000259756,Google ,,,,,,,{},2022-10-26T15:25:01Z,2022-10-26T15:25:01Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392089,Google LLC,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000393640,Google LLC.,,,,,,,{},2023-08-30T20:40:11Z,2023-08-30T20:40:11Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000403308,Hempuli Oy,,,,,,,{},2023-11-07T20:42:22Z,2023-11-07T20:42:22Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000268348,Hubspot,,Caroline Sampson ,csampson@hubspot.com,,,,{},2022-11-15T16:36:03Z,2022-11-15T16:36:03Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392114,Igor Pavlov,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392103,Intel Corporation,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000405123,Jaspel,,,,,,,{},2023-11-20T16:35:10Z,2023-11-20T16:35:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392099,Jay Lee - jay0lee@gmail.com,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000242881,Keeper ,Keeper Account Manager ,Victoria Elliot ,velliot@keepersecurity.com,407-520-8561,872-266-2908,,{},2022-09-20T21:20:35Z,2022-09-20T21:20:35Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000409925,Klei Entertainment,,,,,,,{},2023-12-21T17:01:44Z,2023-12-21T17:01:44Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392086,"Krisp Technologies, Inc",,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': '2023 main St', 'city': 'spring Grove ', 'state': 'Illinos', 'country': 'US', 'zipcode': '60081'}",20000125219,Lakeshore IT ,IT Vendor,Mike Ward,Mike.Ward@lakeshoreit.com,+1 (773) 987-8439,+1 (847) 238-8026,,{},2022-04-22T17:25:36Z,2022-08-03T20:29:08Z
+"{'line1': '2023 main St\r\n', 'city': 'Spring Groove', 'state': 'Illinois', 'country': 'US', 'zipcode': '60081'}",20000074111,Lakeshore IT Solutions ,IT Vendor ,Mike Ward,Mike.Ward@lakeshoreit.com,+1 (773) 987-8439,+1 (847) 238-8026,,{},2022-03-18T18:00:38Z,2022-03-18T18:00:38Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392113,Lascar Electronics Ltd,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000043326,Lenovo,,,,,,,{},2022-02-23T17:53:49Z,2022-02-23T17:53:49Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000125637,Lenovoo,,,,,,,{},2022-04-22T18:23:11Z,2022-04-22T18:23:11Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000417774,LocalThunk,,,,,,,{},2024-02-21T15:20:46Z,2024-02-21T15:20:46Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392084,Logi,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': '7700 Gateway Blvd', 'city': 'Newark', 'state': 'California', 'country': 'United States', 'zipcode': '94560'}",20000035085,Logitech,,,,,,,{},2022-02-17T20:44:50Z,2022-02-17T20:44:50Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392104,MelGeek,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000035087,Microsoft,,,,,,,{},2022-02-17T20:44:51Z,2022-02-17T20:44:51Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392087,Microsoft Corporation,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000425541,Microsoft Corporations,,,,,,,{},2024-03-22T19:08:58Z,2024-03-22T19:08:58Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000397268,Mozilla,,,,,,,{},2023-09-26T18:10:10Z,2023-09-26T18:10:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000403698,Nexile,,,,,,,{},2023-11-09T20:00:09Z,2023-11-09T20:00:09Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392116,Nmap Project,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000425542,Node.js Foundation,,,,,,,{},2024-03-22T19:08:58Z,2024-03-22T19:08:58Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000412367,Nord Security,,,,,,,{},2024-01-09T21:04:03Z,2024-01-09T21:04:03Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000412366,NordVPN,,,,,,,{},2024-01-09T21:04:03Z,2024-01-09T21:04:03Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392105,NVIDIA Corporation,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392092,OBS Project,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392096,Oracle Corporation,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000410078,Pixel Purrfect,,,,,,,{},2023-12-22T20:31:20Z,2023-12-22T20:31:20Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000043327,Plustek,,,,,,,{},2022-02-23T17:53:58Z,2022-02-23T17:53:58Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392110,poncle,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000393880,Python Software Foundation,,,,,,,{},2023-09-01T15:56:35Z,2023-09-01T15:56:35Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000393886,R Core Team,,,,,,,{},2023-09-01T16:26:35Z,2023-09-01T16:26:35Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000403133,RealPeach,,,,,,,{},2023-11-06T18:42:20Z,2023-11-06T18:42:20Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392138,Realtek Semiconductor Corp.,,,,,,,{},2023-08-22T19:23:58Z,2023-08-22T19:23:58Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392115,Rivet Networks,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000410447,Roboatino,,,,,,,{},2023-12-27T19:31:25Z,2023-12-27T19:31:25Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000410379,Rocket Rat Games,,,,,,,{},2023-12-27T15:01:24Z,2023-12-27T15:01:24Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000403454,Sabotage Studio,,,,,,,{},2023-11-08T20:30:18Z,2023-11-08T20:30:18Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392083,Simon Tatham,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000414121,"SK hynix, Inc.",,,,,,,{},2024-01-24T20:38:12Z,2024-01-24T20:38:12Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392094,Slack Technologies Inc.,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000412307,Square Enix,,,,,,,{},2024-01-09T16:01:23Z,2024-01-09T16:01:23Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000406027,Stratera Games,,,,,,,{},2023-11-28T17:11:07Z,2023-11-28T17:11:07Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392107,Team Fractal Alligator,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392112,Team Shinkansen,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392117,TeamViewer,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000408233,Terry Cavanagh,,,,,,,{},2023-12-12T15:31:12Z,2023-12-12T15:31:12Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000393809,The Git Development Community,,,,,,,{},2023-08-31T20:35:09Z,2023-08-31T20:35:09Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000443757,"The Wireshark developer community, https://www.wireshark.org",,,,,,,{},2024-08-23T14:53:33Z,2024-08-23T14:53:33Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392108,TrampolineTales,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392091,Valve Corporation,,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392090,"VMware, Inc.",,,,,,,{},2023-08-22T18:44:10Z,2023-08-22T18:44:10Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000404127,Voracious Games,,,,,,,{},2023-11-13T20:05:00Z,2023-11-13T20:05:00Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000417551,WildArts Studio Inc.,,,,,,,{},2024-02-19T16:21:59Z,2024-02-19T16:21:59Z
+"{'line1': None, 'city': None, 'state': None, 'country': None, 'zipcode': None}",20000392118,Zscaler Inc.,"Regional Account Manager, Commercial Northeast",Jack Hendrickson,jhendrickson@zscaler.com,401.479.0190,,,{},2023-08-22T18:44:10Z,2023-11-28T21:15:17Z
