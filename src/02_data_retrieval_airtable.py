@@ -1,5 +1,4 @@
 # 02_data_retrieval_airtable.py
-# airtable_data.py
 import os
 import pandas as pd
 from dotenv import load_dotenv
