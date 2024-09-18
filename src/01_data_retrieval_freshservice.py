@@ -1,4 +1,5 @@
-# src/freshservice_data.py
+# 01_data_retrieval_freshservice.py
+# freshservice_data.py
 import os
 import requests
 import pandas as pd

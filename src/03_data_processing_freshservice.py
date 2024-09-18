@@ -1,3 +1,7 @@
+# 03_data_processing_freshservice.py
+# freshservice_processing.py
+#
+#
 import pandas as pd
 import ast
 import re
@@ -34,24 +38,20 @@ def clean_column_names(df):
     df.columns = [clean_column(col) for col in df.columns]
     return df
 
-# Individual mapping functions
+# Individual mapping functions with pre-merge renaming
 def map_departments(assets_df, departments_df):
     if departments_df is not None and 'department_id' in assets_df.columns:
         print("Mapping departments...")
-        return assets_df.merge(
-            departments_df[['id', 'name']].rename(columns={'id': 'department_id', 'name': 'department_name'}),
-            how='left', on='department_id'
-        )
+        departments_df = departments_df.rename(columns={'id': 'department_id', 'name': 'department_name'})
+        return assets_df.merge(departments_df[['department_id', 'department_name']], how='left', on='department_id')
     print("Warning: Missing department mapping.")
     return assets_df
 
 def map_vendors(assets_df, vendors_df):
     if vendors_df is not None and 'vendor' in assets_df.columns:
         print("Mapping vendors...")
-        return assets_df.merge(
-            vendors_df[['id', 'name']].rename(columns={'id': 'vendor_id', 'name': 'vendor_name'}),
-            how='left', left_on='vendor', right_on='vendor_id'
-        )
+        vendors_df = vendors_df.rename(columns={'id': 'vendor_id', 'name': 'vendor_name'})
+        return assets_df.merge(vendors_df[['vendor_id', 'vendor_name']], how='left', left_on='vendor', right_on='vendor_id')
     print("Warning: Missing vendor mapping.")
     return assets_df
 
@@ -66,20 +66,16 @@ def map_requesters(assets_df, requesters_df):
         else:
             print("Warning: Missing name columns in requesters data.")
             return assets_df
-        return assets_df.merge(
-            requesters_df[['id', name_column]].rename(columns={'id': 'user_id', name_column: 'requester_name'}),
-            how='left', on='user_id'
-        )
+        requesters_df = requesters_df.rename(columns={'id': 'user_id', name_column: 'requester_name'})
+        return assets_df.merge(requesters_df[['user_id', 'requester_name']], how='left', on='user_id')
     print("Warning: Missing requester mapping.")
     return assets_df
 
 def map_asset_types(assets_df, asset_types_df):
     if asset_types_df is not None and 'asset_type_id' in assets_df.columns:
         print("Mapping asset types...")
-        return assets_df.merge(
-            asset_types_df[['id', 'name']].rename(columns={'id': 'asset_type_id', 'name': 'asset_type_name'}),
-            how='left', on='asset_type_id'
-        )
+        asset_types_df = asset_types_df.rename(columns={'id': 'asset_type_id', 'name': 'asset_type_name'})
+        return assets_df.merge(asset_types_df[['asset_type_id', 'asset_type_name']], how='left', on='asset_type_id')
     print("Warning: Missing asset type mapping.")
     return assets_df
 
@@ -87,24 +83,25 @@ def map_filewave(assets_df, filewave_df):
     if filewave_df is not None and 'name' in filewave_df.columns:
         print("Mapping filewave data...")
         assets_df['temp_match'] = assets_df['hostname'].fillna(assets_df['name'])
-        merged_df = assets_df.merge(filewave_df[['name', 'platform', 'version', 'last_logged_username', 'last_connect']],
-                                    how='left', left_on='temp_match', right_on='name', suffixes=('', '_filewave'))
-        return merged_df.drop(columns=['temp_match']).rename(columns={'name_filewave': 'filewave_name'})
+        filewave_df = filewave_df.rename(columns={'name': 'filewave_name'})
+        merged_df = assets_df.merge(filewave_df[['filewave_name', 'platform', 'version', 'last_logged_username', 'last_connect']],
+                                    how='left', left_on='temp_match', right_on='filewave_name')
+        return merged_df.drop(columns=['temp_match'])
     print("Warning: Missing filewave mapping.")
     return assets_df
 
 def map_products(assets_df, products_df):
     if products_df is not None and 'product' in assets_df.columns:
         print("Mapping product data...")
-        return assets_df.merge(
-            products_df[['id', 'name', 'manufacturer', 'description', 'description_text']],
-            how='left', left_on='product', right_on='id', suffixes=('', '_product')
-        ).rename(columns={
-            'name_product': 'product_name',
-            'manufacturer': 'manufacturer',
-            'description_product': 'product_description',
+        products_df = products_df.rename(columns={
+            'id': 'product_id',
+            'name': 'product_name',
+            'manufacturer': 'manufacturer_name',
+            'description': 'product_description',
             'description_text': 'product_description2'
         })
+        return assets_df.merge(products_df[['product_id', 'product_name', 'manufacturer_name', 'product_description', 'product_description2']],
+                               how='left', left_on='product', right_on='product_id')
     print("Warning: Missing product mapping.")
     return assets_df
 
