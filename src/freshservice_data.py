@@ -1,3 +1,4 @@
+# src/freshservice_data.py
 import os
 import requests
 import pandas as pd
@@ -58,6 +59,12 @@ def create_headers(api_key):
         'Content-Type': 'application/json'
     }
 
+# Function to convert column names to snake_case
+def convert_columns_to_snake_case(df):
+    """Convert DataFrame column names to snake_case."""
+    df.columns = df.columns.str.replace(' ', '_').str.replace('-', '_').str.lower()
+    return df
+
 # General function to fetch paginated data from a URL with dynamic response key detection
 def fetch_paginated_data(url, headers, session):
     """Fetch paginated data from a specific URL and dynamically find the correct response key."""
@@ -90,6 +97,8 @@ def save_to_csv(data, filename, data_dir):
     """Helper function to save data to a CSV file."""
     if data:
         df = pd.DataFrame(data)
+        # Convert column names to snake_case
+        df = convert_columns_to_snake_case(df)
         csv_path = data_dir / filename
         df.to_csv(csv_path, index=False)
         print(f"Data saved to {csv_path}")
@@ -164,6 +173,8 @@ def create_unified_dataframe(asset_df, data_types, base_url, headers, session):
 
     # Convert to DataFrame
     unified_df = pd.DataFrame(asset_data)
+    # Convert column names to snake_case
+    unified_df = convert_columns_to_snake_case(unified_df)
     return unified_df
 
 # Function to save the unified DataFrame to a CSV file
@@ -173,7 +184,10 @@ def save_unified_dataframe(df, filename, data_dir):
     df.to_csv(output_path, index=False)
     print(f"Unified data saved to {output_path}")
 
-def main(data_dir):
+def main():
+    # Step 0: Ensure data directory exists
+    data_dir = ensure_data_dir()
+
     # Step 1: Load environment variables
     env_vars = load_env_variables()
 
@@ -204,4 +218,4 @@ def main(data_dir):
         save_unified_dataframe(unified_df, 'assets_data_associates.csv', data_dir)
 
 if __name__ == "__main__":
-    main(Path("./data"))  # This line won't be used when called from the main orchestrator
+    main()

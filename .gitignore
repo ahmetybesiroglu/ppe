@@ -165,7 +165,3 @@ cython_debug/
 
 # PyCharm
 .idea/
-
-# Ignore notebooks and data folders
-notebooks/
-data/

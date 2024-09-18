@@ -15,6 +15,7 @@ seaborn = "^0.13.2"
 pyairtable = "^2.3.3"
 dedupe = "^3.0.3"
 thefuzz = "^0.22.1"
+openai = "^1.46.0"
 
 
 [tool.poetry.group.dev.dependencies]

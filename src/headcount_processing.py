@@ -11,15 +11,33 @@ def load_csv(filepath):
         raise FileNotFoundError(f"The file {file_path} does not exist or is not a CSV file.")
 
 def filter_active_employees(df):
-    """Filters the DataFrame to include only rows with 'Active' status."""
+    """Filters the DataFrame to include only rows with 'active' status (using snake_case column names)."""
     print("Filtering active employees...")
-    active_df = df[df['Status'] == 'Active'][['First Name', 'Last Name']].copy()
+    active_df = df[df['status'] == 'Active'][['first_name', 'last_name']].copy()
     return active_df
 
+def clean_names(df):
+    """Strips any leading/trailing whitespace from 'first_name' and 'last_name'."""
+    print("Stripping whitespace from 'first_name' and 'last_name' columns...")
+    df['first_name'] = df['first_name'].str.strip()
+    df['last_name'] = df['last_name'].str.strip()
+    return df
+
 def add_full_name(df):
-    """Adds a 'Full Name' column by combining 'First Name' and 'Last Name'."""
+    """Adds a 'full_name' column by combining 'first_name' and 'last_name'."""
     print("Adding 'Full Name' column...")
-    df['Full Name'] = df['First Name'] + ' ' + df['Last Name']
+    df['full_name'] = df['first_name'] + ' ' + df['last_name']
+    return df
+
+def sort_by_last_name(df):
+    """Sorts the DataFrame by 'last_name'."""
+    print("Sorting by 'last_name'...")
+    return df.sort_values(by='last_name')
+
+def add_employee_id(df):
+    """Adds an 'employee_id' column with values from 1 to n."""
+    print("Adding 'employee_id' column...")
+    df.insert(0, 'employee_id', range(1, len(df) + 1))
     return df
 
 def save_to_csv(df, output_filepath):
@@ -37,8 +55,17 @@ def process_headcount_data(input_filepath, output_filepath):
     # Filter active employees
     active_employees_df = filter_active_employees(headcount_df)
 
+    # Clean names by stripping whitespace
+    active_employees_df = clean_names(active_employees_df)
+
     # Add 'Full Name' column
     active_employees_df = add_full_name(active_employees_df)
+
+    # Sort the DataFrame by 'last_name'
+    active_employees_df = sort_by_last_name(active_employees_df)
+
+    # Add 'employee_id' column
+    active_employees_df = add_employee_id(active_employees_df)
 
     # Save the result to a new CSV file
     save_to_csv(active_employees_df, output_filepath)
