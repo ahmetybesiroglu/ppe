@@ -20,11 +20,11 @@ def main():
 
     # Define the scripts to run in order
     scripts = [
-        'src/01_data_retrieval_freshservice.py',
-        'src/02_data_retrieval_airtable.py',
-        'src/03_data_processing_freshservice.py',
-        'src/04_data_processing_headcount.py',
-        'src/05_data_standardization.py',
+        'src/data_retrieval_freshservice.py',
+        'src/data_retrieval_airtable.py',
+        'src/data_processing_freshservice.py',
+        'src/data_processing_headcount.py',
+        'src/data_standardization.py',
     ]
 
     for script in scripts:
@@ -42,7 +42,7 @@ def main():
     print('\nAll scripts executed successfully.')
 
     # Now, launch the Streamlit app
-    streamlit_script = 'src/06_laptop_matching.py'
+    streamlit_script = 'src/laptop_matching.py'
     streamlit_script_path = Path(streamlit_script)
     if streamlit_script_path.exists():
         print('\nLaunching Streamlit app...\n' + '-'*50)

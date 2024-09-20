@@ -138,7 +138,7 @@ def get_matching_purchases(asset, purchases):
     )
     remaining_purchases['date_discrepancy'] = (asset['created_at'] - remaining_purchases['date']).dt.days
     fuzzy_matches = remaining_purchases[
-        (remaining_purchases['fuzzy_score'] > 70) &
+        (remaining_purchases['fuzzy_score'] > 45) &
         (remaining_purchases['date_discrepancy'] >= 0) &
         (remaining_purchases['remaining_count'] > 0)
     ].sort_values(['fuzzy_score', 'date_discrepancy'], ascending=[False, True])
