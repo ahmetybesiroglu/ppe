@@ -1,4 +1,3 @@
-# 05_data_standardization.py
 import os
 import pandas as pd
 import ast
@@ -6,6 +5,7 @@ from openai import OpenAI
 from dotenv import load_dotenv
 from pathlib import Path
 from collections import Counter
+import re
 
 def load_env_variables():
     """Load environment variables from the .env file."""
@@ -28,6 +28,15 @@ def combine_counts(*counts_dicts):
         combined_counts.update(counts)
     return dict(combined_counts)
 
+def extract_dict_from_text(text):
+    """Extract and return only the dictionary part from a string containing extra text."""
+    # Use regular expression to capture everything between the first '{' and the last '}'
+    match = re.search(r'\{.*\}', text, re.DOTALL)
+    if match:
+        return match.group(0)  # Return the matched dictionary part
+    else:
+        raise ValueError("No valid dictionary found in the text.")
+
 def send_to_gpt_for_analysis(client, counts, column_name):
     """Send the combined counts to GPT for standardization."""
     system_prompt = f"""
@@ -40,20 +49,20 @@ def send_to_gpt_for_analysis(client, counts, column_name):
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": cleaned_content}
             ],
             temperature=0,
-            max_tokens=1000,
+            max_tokens=2000,
             top_p=1,
             frequency_penalty=0,
             presence_penalty=0
         )
 
         # Extract and return the response text
-        response_text = response.choices[0].message.content.strip()
+        response_text = extract_dict_from_text(response.choices[0].message.content.strip())
         return response_text
 
     except Exception as e:
@@ -90,6 +99,18 @@ def assign_asset_id(df):
     df.insert(0, 'asset_id', range(1, len(df) + 1))
     return df
 
+def clean_quotes(df, columns):
+    """Remove all double quotes, including escaped ones, and strip surrounding quotes from specified columns in a DataFrame."""
+    for column in columns:
+        if column in df.columns:
+            # Replace escaped quotes with nothing
+            df[column] = df[column].str.replace(r'\"', '', regex=True)
+            # Remove all non-escaped double quotes
+            df[column] = df[column].str.replace(r'"', '', regex=True)
+            # Strip any leading or trailing spaces or quotes
+            df[column] = df[column].str.strip()
+    return df
+
 def main():
     # Load environment variables
     openai_api_key = load_env_variables()
@@ -105,12 +126,19 @@ def main():
     # File paths for saved mappings
     combined_vendor_mapping_file_path = data_dir / 'combined_vendor_mapping.txt'
     combined_asset_class_type_mapping_file_path = data_dir / 'combined_asset_class_type_mapping.txt'
+    combined_item_product_mapping_file_path = data_dir / 'combined_item_product_mapping.txt'
 
-    ### Step 1: Process vendors ###
+    ### Step 1: Load and clean data ###
 
-    # Load vendor data from both datasets
+    # Load data
     netsuite_df, netsuite_vendor_counts = load_data(netsuite_file_path, 'vendor')
     assets_df, assets_vendor_counts = load_data(assets_file_path, 'vendor_name')
+
+    # # Clean quotes from `item` and `product_name` columns
+    # netsuite_df = clean_quotes(netsuite_df, ['item'])
+    # assets_df = clean_quotes(assets_df, ['product_name'])
+
+    ### Step 2: Process vendors ###
 
     # Check if the vendor mapping already exists
     if not combined_vendor_mapping_file_path.exists():
@@ -129,7 +157,7 @@ def main():
     netsuite_df = apply_mapping_to_dataset(netsuite_df, 'vendor', vendor_mapping)
     assets_df = apply_mapping_to_dataset(assets_df, 'vendor_name', vendor_mapping)
 
-    ### Step 2: Process asset class and asset type combined ###
+    ### Step 3: Process asset class and asset type combined ###
 
     # Check if the asset class/type mapping already exists
     if not combined_asset_class_type_mapping_file_path.exists():
@@ -152,17 +180,40 @@ def main():
     netsuite_df = apply_mapping_to_dataset(netsuite_df, 'asset_class', asset_class_type_mapping)
     assets_df = apply_mapping_to_dataset(assets_df, 'asset_type_name', asset_class_type_mapping)
 
-    ### Step 3: Format date columns ###
+    ### Step 4: Process items and product names ###
+
+    # Check if the item/product mapping already exists
+    if not combined_item_product_mapping_file_path.exists():
+        print(f"Item/Product mapping does not exist, generating it...")
+        # Load item and product name data
+        _, assets_product_counts = load_data(assets_file_path, 'product_name')
+        _, netsuite_item_counts = load_data(netsuite_file_path, 'item')
+
+        # Combine item and product counts and send to GPT
+        combined_item_product_counts = combine_counts(assets_product_counts, netsuite_item_counts)
+        combined_item_product_mapping = send_to_gpt_for_analysis(client, combined_item_product_counts, 'item and product_name')
+
+        if combined_item_product_mapping:
+            save_to_txt(combined_item_product_mapping, combined_item_product_mapping_file_path)
+    else:
+        print(f"Using cached item/product mapping from {combined_item_product_mapping_file_path}")
+
+    # Load and apply item/product mapping
+    item_product_mapping = load_mapping(combined_item_product_mapping_file_path)
+    netsuite_df = apply_mapping_to_dataset(netsuite_df, 'item', item_product_mapping)
+    assets_df = apply_mapping_to_dataset(assets_df, 'product_name', item_product_mapping)
+
+    ### Step 5: Format date columns ###
 
     # Define date columns to be formatted
     date_columns = ['created_at', 'updated_at', 'acquisition_date', 'warranty_expiry_date']
     assets_df = format_dates(assets_df, date_columns)
 
-    ### Step 4: Sort data by 'created_at' and assign 'asset_id' ###
+    ### Step 6: Sort data by 'created_at' and assign 'asset_id' ###
     assets_df = assets_df.sort_values(by='created_at')
     assets_df = assign_asset_id(assets_df)
 
-    ### Step 5: Save the cleaned datasets ###
+    ### Step 7: Save the cleaned datasets ###
 
     cleaned_netsuite_file_path = data_dir / 'netsuite_data_cleaned.csv'
     cleaned_assets_file_path = data_dir / 'assets_data_cleaned.csv'

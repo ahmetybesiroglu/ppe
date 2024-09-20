@@ -36,6 +36,14 @@ def convert_columns_to_snake_case(df):
     df.columns = df.columns.str.replace(' ', '_').str.replace('-', '_').str.lower()
     return df
 
+# Function to clean double quotes from specific columns
+def clean_quotes(df, columns):
+    """Remove all double quotes from specified columns in a DataFrame."""
+    for column in columns:
+        if column in df.columns:
+            df[column] = df[column].str.replace(r'"', '', regex=True).str.strip()
+    return df
+
 # Function to fetch data from Airtable and save it to a CSV file
 def fetch_and_save_airtable_data(api, base_id, table_id, data_dir, filename, add_purchase_id=False, date_column=None):
     """Fetch data from Airtable table, sort by date, and save it as a CSV with optional purchase_id."""
@@ -53,6 +61,12 @@ def fetch_and_save_airtable_data(api, base_id, table_id, data_dir, filename, add
 
     # Convert column names to snake_case
     df = convert_columns_to_snake_case(df)
+
+    # # Clean quotes from relevant columns
+    # if 'item' in df.columns:
+    #     df = clean_quotes(df, ['item'])  # Ensure no quotes in 'item' column
+    # if 'product_name' in df.columns:
+    #     df = clean_quotes(df, ['product_name'])  # Ensure no quotes in 'product_name' column
 
     # Sort the data by date if a date_column is provided
     if date_column and date_column in df.columns:

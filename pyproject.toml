@@ -16,6 +16,10 @@ pyairtable = "^2.3.3"
 dedupe = "^3.0.3"
 thefuzz = "^0.22.1"
 openai = "^1.46.0"
+streamlit = "^1.38.0"
+rapidfuzz = "^3.9.7"
+scikit-learn = "^1.5.2"
+watchdog = "^4.0"
 
 
 [tool.poetry.group.dev.dependencies]
