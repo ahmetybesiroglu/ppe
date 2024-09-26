@@ -1,4 +1,4 @@
-# 01_data_retrieval_freshservice.py
+# src/data_retrieval_freshservice.py
 import os
 import requests
 import pandas as pd
@@ -93,31 +93,51 @@ def fetch_paginated_data(url, headers, session):
     return all_data
 
 # Function to save data to CSV
-def save_to_csv(data, filename, data_dir):
-    """Helper function to save data to a CSV file."""
-    if data:
-        df = pd.DataFrame(data)
-        # Convert column names to snake_case
-        df = convert_columns_to_snake_case(df)
-        csv_path = data_dir / filename
-        df.to_csv(csv_path, index=False)
-        print(f"Data saved to {csv_path}")
-        return df
+def save_to_csv(new_data, filename, data_dir):
+    """Helper function to save data to a CSV file and append new data without duplicates."""
+    csv_path = data_dir / filename
+    if csv_path.exists():
+        print(f"{filename} already exists. Merging new data with existing data.")
+        existing_df = pd.read_csv(csv_path)
+        if new_data:
+            new_df = pd.DataFrame(new_data)
+            new_df = convert_columns_to_snake_case(new_df)
+
+            # Merge new data with existing data (avoiding duplicates)
+            combined_df = pd.concat([existing_df, new_df]).drop_duplicates().reset_index(drop=True)
+            combined_df.to_csv(csv_path, index=False)
+            print(f"Updated data saved to {csv_path}")
+            return combined_df
+        else:
+            print(f"No new data to merge for {filename}.")
+            return existing_df
     else:
-        print(f"No data found for {filename}.")
-        return None
+        if new_data:
+            new_df = pd.DataFrame(new_data)
+            new_df = convert_columns_to_snake_case(new_df)
+            new_df.to_csv(csv_path, index=False)
+            print(f"Data saved to {csv_path}")
+            return new_df
+        else:
+            print(f"No data found for {filename}.")
+            return None
 
 # Function to download data from an endpoint and save it to CSV
 def download_data(endpoint, filename, base_url, headers, data_dir, session):
     """Generic function to download data from a specific endpoint and save to CSV."""
+    csv_path = data_dir / filename
+    if csv_path.exists():
+        print(f"{filename} already exists. Loading existing data.")
+        return pd.read_csv(csv_path)
+
     # Check if the endpoint already has query parameters (contains '?')
     if '?' in endpoint:
         url = base_url + f"{endpoint}&per_page=30"
     else:
         url = base_url + f"{endpoint}?per_page=30"
 
-    data = fetch_paginated_data(url, headers, session)
-    return save_to_csv(data, filename, data_dir)
+    new_data = fetch_paginated_data(url, headers, session)
+    return save_to_csv(new_data, filename, data_dir)
 
 # Function to fetch additional data for an asset (components, requests, contracts, etc.)
 def fetch_additional_data(display_id, data_types, base_url, headers, session):
@@ -156,6 +176,14 @@ def fetch_data_from_url(url, display_id, headers, session):
 def create_unified_dataframe(asset_df, data_types, base_url, headers, session):
     """Create a DataFrame with display_id as rows and additional data as columns."""
     asset_data = []
+    data_dir = ensure_data_dir()
+
+    # Check if unified data file exists
+    unified_filename = 'assets_data_associates.csv'
+    unified_file_path = data_dir / unified_filename
+    if unified_file_path.exists():
+        print(f"{unified_filename} already exists. Skipping unified data creation.")
+        return pd.read_csv(unified_file_path)
 
     for _, row in asset_df.iterrows():
         display_id = row['display_id']
@@ -175,14 +203,12 @@ def create_unified_dataframe(asset_df, data_types, base_url, headers, session):
     unified_df = pd.DataFrame(asset_data)
     # Convert column names to snake_case
     unified_df = convert_columns_to_snake_case(unified_df)
-    return unified_df
 
-# Function to save the unified DataFrame to a CSV file
-def save_unified_dataframe(df, filename, data_dir):
-    """Save the unified DataFrame as a CSV file."""
-    output_path = data_dir / filename
-    df.to_csv(output_path, index=False)
-    print(f"Unified data saved to {output_path}")
+    # Save the unified DataFrame as a CSV file
+    unified_df.to_csv(unified_file_path, index=False)
+    print(f"Unified data saved to {unified_file_path}")
+
+    return unified_df
 
 def main():
     # Step 0: Ensure data directory exists
@@ -203,7 +229,6 @@ def main():
     # Step 4: Download asset data and other datasets
     asset_df = download_data('assets?include=type_fields&order_by=created_at&order_type=asc', 'assets_data.csv', base_url, headers, data_dir, session)
     download_data('requesters', 'requesters_data.csv', base_url, headers, data_dir, session)
-    download_data('agents', 'agents_data.csv', base_url, headers, data_dir, session)
     download_data('vendors', 'vendors_data.csv', base_url, headers, data_dir, session)
     download_data('products', 'products_data.csv', base_url, headers, data_dir, session)
     download_data('asset_types', 'asset_types_data.csv', base_url, headers, data_dir, session)
@@ -214,8 +239,7 @@ def main():
 
     # Step 6: Create a unified dataframe with additional data and save it
     if asset_df is not None:
-        unified_df = create_unified_dataframe(asset_df, additional_data_types, base_url, headers, session)
-        save_unified_dataframe(unified_df, 'assets_data_associates.csv', data_dir)
+        create_unified_dataframe(asset_df, additional_data_types, base_url, headers, session)
 
 if __name__ == "__main__":
     main()

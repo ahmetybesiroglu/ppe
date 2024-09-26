@@ -1,4 +1,4 @@
-# 04_data_processing_headcount.py
+# src/data_processing_headcount.py
 import pandas as pd
 from pathlib import Path
 
@@ -11,17 +11,37 @@ def load_csv(filepath):
     else:
         raise FileNotFoundError(f"The file {file_path} does not exist or is not a CSV file.")
 
-def filter_active_employees(df):
-    """Filters the DataFrame to include only rows with 'active' status (using snake_case column names)."""
-    print("Filtering active employees...")
-    active_df = df[df['status'] == 'Active'][['first_name', 'last_name']].copy()
-    return active_df
+def filter_employees(df):
+    """
+    Filters the DataFrame to include relevant columns and only active employees.
+    Also, removes rows with empty first_name and last_name columns.
+    """
+    print("Filtering employees and selecting required columns...")
+
+    # Select relevant columns
+    employee_df = df[['first_name', 'last_name', 'masterworks_email', 'status', 'employee_type', 'title',
+                      'position_start_date', 'department', 'termination_date']].copy()
+
+    # Remove rows where both 'first_name' and 'last_name' are empty
+    employee_df = employee_df.dropna(subset=['first_name', 'last_name'], how='all')
+
+    # Filter only active employees
+    employee_df = employee_df[employee_df['status'] == 'Active']
+
+    return employee_df
 
 def clean_names(df):
-    """Strips any leading/trailing whitespace from 'first_name' and 'last_name'."""
-    print("Stripping whitespace from 'first_name' and 'last_name' columns...")
-    df['first_name'] = df['first_name'].str.strip()
-    df['last_name'] = df['last_name'].str.strip()
+    """Strips any leading/trailing whitespace from 'first_name', 'last_name', and 'masterworks_email'."""
+    print("Stripping whitespace from 'first_name', 'last_name', and 'masterworks_email' columns...")
+
+    if 'masterworks_email' not in df.columns:
+        raise KeyError("'masterworks_email' column not found in the DataFrame.")
+
+    # Convert the columns to string and handle NaN values before stripping whitespace
+    df['first_name'] = df['first_name'].fillna('').astype(str).str.strip()
+    df['last_name'] = df['last_name'].fillna('').astype(str).str.strip()
+    df['masterworks_email'] = df['masterworks_email'].fillna('').astype(str).apply(lambda x: str(x).strip() if isinstance(x, str) else x)
+
     return df
 
 def add_full_name(df):
@@ -53,23 +73,23 @@ def process_headcount_data(input_filepath, output_filepath):
     # Load the CSV file
     headcount_df = load_csv(input_filepath)
 
-    # Filter active employees
-    active_employees_df = filter_active_employees(headcount_df)
+    # Filter employees and select required columns
+    employees_df = filter_employees(headcount_df)
 
     # Clean names by stripping whitespace
-    active_employees_df = clean_names(active_employees_df)
+    employees_df = clean_names(employees_df)
 
     # Add 'Full Name' column
-    active_employees_df = add_full_name(active_employees_df)
+    employees_df = add_full_name(employees_df)
 
     # Sort the DataFrame by 'last_name'
-    active_employees_df = sort_by_last_name(active_employees_df)
+    employees_df = sort_by_last_name(employees_df)
 
     # Add 'employee_id' column
-    active_employees_df = add_employee_id(active_employees_df)
+    employees_df = add_employee_id(employees_df)
 
     # Save the result to a new CSV file
-    save_to_csv(active_employees_df, output_filepath)
+    save_to_csv(employees_df, output_filepath)
 
 def main(data_dir=None):
     """

@@ -87,7 +87,7 @@ purchase_id,date,asset_class,reference,vendor,item,cost,description,count,done,n
 13 - Dell P2722H LED monitor - 27""",13.0,True,13 Dell P2722H LED Monitor 13 Dell Pro KM5221W Keyboard and Mouse Set 13 Jabra Evolve 40 MS Stereo Headset,['easy'],Computer Equipment
 84,2022-02-14,,Hardware,APPLE,,3156.29,Ramp Card,,,,['difficult'],Computer Equipment
 85,2022-02-16,,Hardware,B&H Photo,,1522.07,B&H PHOTO 800-606-6969 MASTERCARD-511572XXXXXX7782-Hai Mihn Tran,,,,['difficult'],Computer Equipment
-86,2022-02-16,Laptop,Hardware,Lakeshore IT Solutions,,10028.69,10 - 210-AYNQ Dell Latitude 3520 BTX,10.0,True,"10 Dell Latitude 3520 15""",['easy'],Computer Equipment
+86,2022-02-16,Laptop,Hardware,Lakeshore IT Solutions,"Dell Latitude 3520 15""",10028.69,10 - 210-AYNQ Dell Latitude 3520 BTX,10.0,True,"10 Dell Latitude 3520 15""",['easy'],Computer Equipment
 87,2022-02-16,,Hardware,APPLE,,7109.54,Ramp Card,,,,['difficult'],Computer Equipment
 88,2022-02-16,Monitor,Hardware,Global Computer Sales,"Dell Latitude 3520 15""",8500.0,Ramp Card,,,Receipt for monitors ,['difficult'],Computer Equipment
 89,2022-02-18,,Hardware,APPLE,,1084.4,Apple MASTERCARD-511572XXXXXX6737-Ewa Jones,,,,['difficult'],Computer Equipment

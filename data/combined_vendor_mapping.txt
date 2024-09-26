@@ -24,7 +24,7 @@
     'Empire Office Inc.': 'Empire Office',
     'BEST BUY': 'Best Buy',
     'Austin, TX': 'Austin, TX',
-    'Google Services': 'Google Services',
+    'Google Services': 'Google',
     'SONY': 'Sony',
     'Adorama': 'Adorama',
     'Microsoft': 'Microsoft',

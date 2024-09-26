@@ -1,7 +1,5 @@
-# 03_data_processing_freshservice.py
-# freshservice_processing.py
-#
-#
+# src/data_processing_freshservice.py
+
 import pandas as pd
 import ast
 import re
@@ -105,10 +103,21 @@ def map_products(assets_df, products_df):
     print("Warning: Missing product mapping.")
     return assets_df
 
-# Function to save the DataFrame to a CSV file
+# Function to clean unnecessary '.0' from float columns and save the DataFrame to a CSV file
 def save_csv(df, output_file_path):
+    # Iterate through each column and check if it's a float type
+    for column in df.columns:
+        if pd.api.types.is_float_dtype(df[column]):
+            # If the column has float type but all values are whole numbers, convert to integers
+            if (df[column] % 1 == 0).all():
+                df[column] = df[column].astype('Int64')  # Use Int64 to handle NaN values properly
+            else:
+                # If not whole numbers, you may choose to format or leave as floats
+                df[column] = df[column].apply(lambda x: f"{x:.0f}" if pd.notnull(x) else "")
+
     df.to_csv(output_file_path, index=False)
     print(f'Cleaned and flattened CSV saved to {output_file_path}')
+
 
 # Main function to process the CSV file
 def process_csv(input_file_path, output_file_path, departments_file_path=None, vendors_file_path=None,

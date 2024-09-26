@@ -1,4 +1,4 @@
-# 02_data_retrieval_airtable.py
+# src/data_retrieval_airtable.py
 import os
 import pandas as pd
 from dotenv import load_dotenv
@@ -47,6 +47,11 @@ def clean_quotes(df, columns):
 # Function to fetch data from Airtable and save it to a CSV file
 def fetch_and_save_airtable_data(api, base_id, table_id, data_dir, filename, add_purchase_id=False, date_column=None):
     """Fetch data from Airtable table, sort by date, and save it as a CSV with optional purchase_id."""
+    csv_path = data_dir / filename
+    if csv_path.exists():
+        print(f"{filename} already exists. Skipping API call.")
+        return pd.read_csv(csv_path)
+
     print(f"Fetching data from table {table_id}...")
 
     # Get records from the specified table
@@ -62,12 +67,6 @@ def fetch_and_save_airtable_data(api, base_id, table_id, data_dir, filename, add
     # Convert column names to snake_case
     df = convert_columns_to_snake_case(df)
 
-    # # Clean quotes from relevant columns
-    # if 'item' in df.columns:
-    #     df = clean_quotes(df, ['item'])  # Ensure no quotes in 'item' column
-    # if 'product_name' in df.columns:
-    #     df = clean_quotes(df, ['product_name'])  # Ensure no quotes in 'product_name' column
-
     # Sort the data by date if a date_column is provided
     if date_column and date_column in df.columns:
         df[date_column] = pd.to_datetime(df[date_column], errors='coerce')  # Ensure the column is in datetime format
@@ -78,9 +77,9 @@ def fetch_and_save_airtable_data(api, base_id, table_id, data_dir, filename, add
         df.insert(0, 'purchase_id', range(1, len(df) + 1))
 
     # Save to CSV
-    csv_path = data_dir / filename
     df.to_csv(csv_path, index=False)
     print(f"Data saved to {csv_path}")
+    return df
 
 # Main function to load environment variables, fetch and save data
 def main(data_dir=None):
