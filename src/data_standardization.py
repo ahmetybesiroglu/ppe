@@ -1,4 +1,5 @@
 # src/data_standardization.py
+
 import os
 import pandas as pd
 import ast
@@ -18,17 +19,13 @@ def enforce_data_types(df):
     Ensure that ID columns, asset tags, and other relevant fields are integers (or strings if needed),
     while preserving empty values as NaN (and not filling them with 0).
     """
-    # Define columns that should be integers or strings
     int_columns = ['purchase_id', 'asset_type_id', 'asset_id', 'vendor_id', 'product_id', 'display_id', 'count']
     str_columns = ['asset_tag', 'serial_number', 'uuid', 'vendor_name', 'product_name']
 
-    # Ensure columns that should be integers are integers but keep NaNs as NaNs
     for col in int_columns:
         if col in df.columns:
-            # Convert to numeric, allowing NaNs, and then to Int64 to support NaNs
             df[col] = pd.to_numeric(df[col], errors='coerce').astype('Int64')
 
-    # Ensure columns that should be strings are strings
     for col in str_columns:
         if col in df.columns:
             df[col] = df[col].astype(str)
@@ -60,15 +57,14 @@ def extract_dict_from_text(text):
     """Extract and return only the dictionary part from a string containing extra text."""
     match = re.search(r'\{.*\}', text, re.DOTALL)
     if match:
-        return match.group(0)  # Return the matched dictionary part
+        return match.group(0)
     else:
         raise ValueError("No valid dictionary found in the text.")
 
 def consolidate_duplicate_columns(df, base_column, method='sum'):
     """
-    Consolidate duplicate columns (e.g., 'memory', 'os_version', etc.) into a single column.
-    The strategy used here is specified by the 'method' parameter.
-    Supported methods: 'sum', 'max', 'first_non_null'
+    Consolidate duplicate columns (e.g., 'memory', 'os_version') into a single column.
+    Supported methods: 'sum', 'max', 'first_non_null'.
     """
     pattern = rf'^{re.escape(base_column)}(?:\.\d+)?$'
     duplicate_columns = [col for col in df.columns if re.match(pattern, col)]
@@ -76,31 +72,24 @@ def consolidate_duplicate_columns(df, base_column, method='sum'):
     logging.info(f"Found duplicate columns for '{base_column}': {duplicate_columns}")
 
     if len(duplicate_columns) <= 1:
-        logging.info(f"No duplicate columns found for '{base_column}'. No consolidation needed.")
         return df
 
     logging.info(f"Consolidating columns {duplicate_columns} into '{base_column}' using method '{method}'.")
 
     if method == 'sum':
-        df[base_column] = df[duplicate_columns].fillna(0).sum(axis=1)
+        df[base_column] = df[duplicate_columns].sum(axis=1, skipna=True, min_count=1)
     elif method == 'max':
         if pd.api.types.is_numeric_dtype(df[duplicate_columns].dtypes.iloc[0]):
-            df[base_column] = df[duplicate_columns].fillna(0).max(axis=1)
+            df[base_column] = df[duplicate_columns].max(axis=1)
         else:
-            df[base_column] = df[duplicate_columns].bfill(axis=1).iloc[:, 0].infer_objects()
+            # For non-numeric data, use the first non-null value
+            df[base_column] = df[duplicate_columns].apply(lambda row: next((val for val in row if pd.notna(val)), None), axis=1)
     elif method == 'first_non_null':
-        df[base_column] = df[duplicate_columns].bfill(axis=1).iloc[:, 0]
+        df[base_column] = df[duplicate_columns].apply(lambda row: next((val for val in row if pd.notna(val)), None), axis=1)
     else:
         raise ValueError(f"Unsupported consolidation method: {method}")
 
-    if df[base_column].isnull().all():
-        logging.warning(f"Consolidation resulted in an empty '{base_column}' column. Retaining original columns.")
-        return df
-
-    columns_to_drop = [col for col in duplicate_columns if col != base_column]
-    df.drop(columns=columns_to_drop, inplace=True, errors='ignore')
-
-    logging.info(f"Consolidated '{base_column}' and dropped original duplicate columns: {columns_to_drop}.")
+    df.drop(columns=[col for col in duplicate_columns if col != base_column], inplace=True)
     return df
 
 def send_to_gpt_for_analysis(client, counts, column_name):
@@ -121,10 +110,7 @@ def send_to_gpt_for_analysis(client, counts, column_name):
                 {"role": "user", "content": cleaned_content}
             ],
             temperature=0,
-            max_tokens=2000,
-            top_p=1,
-            frequency_penalty=0,
-            presence_penalty=0
+            max_tokens=2000
         )
 
         response_text = extract_dict_from_text(response.choices[0].message.content.strip())
@@ -144,7 +130,7 @@ def load_mapping(file_path):
     """Load the mapping from a .txt file."""
     with open(file_path, 'r') as f:
         mapping_str = f.read().strip()
-        mapping_dict = ast.literal_eval(mapping_str)  # Safely evaluate the string as a dictionary
+        mapping_dict = ast.literal_eval(mapping_str)
     return mapping_dict
 
 def apply_mapping_to_dataset(df, column, mapping):
@@ -185,12 +171,11 @@ def main():
     netsuite_file_path = data_dir / 'netsuite_data.csv'
     assets_file_path = data_dir / 'assets_data_flattened_cleaned_mapped.csv'
 
-    # File paths for saved mappings
     combined_vendor_mapping_file_path = data_dir / 'combined_vendor_mapping.txt'
     combined_asset_class_type_mapping_file_path = data_dir / 'combined_asset_class_type_mapping.txt'
     combined_item_product_mapping_file_path = data_dir / 'combined_item_product_mapping.txt'
 
-    ### Step 1: Load and clean data ###
+    # Step 1: Load and clean data
     try:
         netsuite_df, netsuite_vendor_counts = load_data(netsuite_file_path, 'vendor')
         assets_df, assets_vendor_counts = load_data(assets_file_path, 'vendor_name')
@@ -199,28 +184,15 @@ def main():
         logging.error(f"Error loading data: {e}")
         return
 
-    # Consolidate 'memory' columns
-    try:
-        assets_df = consolidate_duplicate_columns(assets_df, 'memory', method='max')
-    except Exception as e:
-        logging.error(f"Error consolidating 'memory' columns: {e}")
-        return
+    # Consolidate memory, os, and os_version columns
+    for column in ['memory', 'os', 'os_version']:
+        try:
+            assets_df = consolidate_duplicate_columns(assets_df, column, method='max')
+        except Exception as e:
+            logging.error(f"Error consolidating '{column}' columns: {e}")
+            return
 
-    # Consolidate 'os' columns
-    try:
-        assets_df = consolidate_duplicate_columns(assets_df, 'os', method='max')
-    except Exception as e:
-        logging.error(f"Error consolidating 'os' columns: {e}")
-        return
-
-    # Consolidate 'os_version' columns
-    try:
-        assets_df = consolidate_duplicate_columns(assets_df, 'os_version', method='max')
-    except Exception as e:
-        logging.error(f"Error consolidating 'os_version' columns: {e}")
-        return
-
-    ### Step 2: Process vendors ###
+    # Process vendor mappings
     if not combined_vendor_mapping_file_path.exists():
         logging.info(f"Vendor mapping does not exist, generating it...")
         combined_vendor_counts = combine_counts(netsuite_vendor_counts, assets_vendor_counts)
@@ -239,7 +211,7 @@ def main():
     except Exception as e:
         logging.error(f"Error applying vendor mapping: {e}")
 
-    ### Step 3: Process asset class and asset type combined ###
+    # Step 3: Process asset class and type
     if not combined_asset_class_type_mapping_file_path.exists():
         logging.info(f"Asset class/type mapping does not exist, generating it...")
         try:
@@ -265,7 +237,7 @@ def main():
     except Exception as e:
         logging.error(f"Error applying asset class/type mapping: {e}")
 
-    ### Step 4: Process items and product names ###
+    # Step 4: Process items and products
     if not combined_item_product_mapping_file_path.exists():
         logging.info(f"Item/Product mapping does not exist, generating it...")
         try:
@@ -291,7 +263,7 @@ def main():
     except Exception as e:
         logging.error(f"Error applying item/product mapping: {e}")
 
-    ### Step 5: Format date columns ###
+    # Step 5: Format date columns
     date_columns = ['created_at', 'updated_at', 'acquisition_date', 'warranty_expiry_date']
     try:
         assets_df = format_dates(assets_df, date_columns)
@@ -299,7 +271,7 @@ def main():
     except Exception as e:
         logging.error(f"Error formatting date columns: {e}")
 
-    ### Step 6: Sort data by 'created_at' and assign 'asset_id' ###
+    # Step 6: Sort and assign asset_id
     try:
         assets_df = assets_df.sort_values(by='created_at')
         assets_df = assign_asset_id(assets_df)
@@ -307,7 +279,7 @@ def main():
     except Exception as e:
         logging.error(f"Error sorting data or assigning 'asset_id': {e}")
 
-    ### Step 7: Enforce correct data types ###
+    # Step 7: Enforce data types
     try:
         netsuite_df = enforce_data_types(netsuite_df)
         assets_df = enforce_data_types(assets_df)
@@ -315,7 +287,7 @@ def main():
     except Exception as e:
         logging.error(f"Error enforcing data types: {e}")
 
-    ### Step 8: Save the cleaned datasets ###
+    # Step 8: Save cleaned datasets
     try:
         cleaned_netsuite_file_path = data_dir / 'netsuite_data_cleaned.csv'
         cleaned_assets_file_path = data_dir / 'assets_data_cleaned.csv'

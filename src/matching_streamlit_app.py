@@ -1,4 +1,4 @@
-# src/laptop_matching.py
+# src/matching_streamlit_app.py
 
 import streamlit as st
 import pandas as pd
@@ -6,6 +6,10 @@ from pathlib import Path
 from rapidfuzz import fuzz
 import json
 from dotenv import load_dotenv
+import logging
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Load environment variables
 load_dotenv()
@@ -21,36 +25,42 @@ FLAG_FILE = DATA_DIR / "streamlit_done.flag"  # Flag file to indicate when Strea
 # Load data
 @st.cache_data
 def load_data():
-    purchases = pd.read_csv(PURCHASES_FILE)
-    assets = pd.read_csv(ASSETS_FILE)
+    try:
+        logging.info(f"Loading data from {PURCHASES_FILE} and {ASSETS_FILE}")
+        purchases = pd.read_csv(PURCHASES_FILE)
+        assets = pd.read_csv(ASSETS_FILE)
 
-    # Strip whitespace from column names
-    purchases.columns = purchases.columns.str.strip()
-    assets.columns = assets.columns.str.strip()
+        # Strip whitespace from column names
+        purchases.columns = purchases.columns.str.strip()
+        assets.columns = assets.columns.str.strip()
 
-    # Ensure 'count' is numeric and handle missing values
-    purchases['count'] = pd.to_numeric(purchases['count'], errors='coerce').fillna(0).astype(int)
+        # Ensure 'count' is numeric and handle missing values
+        purchases['count'] = pd.to_numeric(purchases['count'], errors='coerce').fillna(0).astype(int)
 
-    # Parse dates after stripping column names
-    purchases['date'] = pd.to_datetime(purchases['date'], errors='coerce')
-    assets['created_at'] = pd.to_datetime(assets['created_at'], errors='coerce')
+        # Parse dates after stripping column names
+        purchases['date'] = pd.to_datetime(purchases['date'], errors='coerce')
+        assets['created_at'] = pd.to_datetime(assets['created_at'], errors='coerce')
 
-    # Preprocess data
-    purchases['vendor_lower'] = purchases['vendor'].fillna('').str.lower()
-    purchases['item_lower'] = purchases['item'].fillna('').str.lower()
-    purchases['description_lower'] = purchases['description'].fillna('').str.lower()
-    purchases['composite_index'] = purchases['item_lower'] + ' ' + purchases['vendor_lower'] + ' ' + purchases['description_lower']
+        # Preprocess data
+        purchases['vendor_lower'] = purchases['vendor'].fillna('').str.lower()
+        purchases['item_lower'] = purchases['item'].fillna('').str.lower()
+        purchases['description_lower'] = purchases['description'].fillna('').str.lower()
+        purchases['composite_index'] = purchases['item_lower'] + ' ' + purchases['vendor_lower'] + ' ' + purchases['description_lower']
 
-    assets['vendor_name_lower'] = assets['vendor_name'].fillna('').str.lower()
-    assets['product_name_lower'] = assets['product_name'].fillna('').str.lower()
-    assets['description_lower'] = assets['description'].fillna('').str.lower()
-    assets['composite_index'] = assets['product_name_lower'] + ' ' + assets['vendor_name_lower'] + ' ' + assets['description_lower']
+        assets['vendor_name_lower'] = assets['vendor_name'].fillna('').str.lower()
+        assets['product_name_lower'] = assets['product_name'].fillna('').str.lower()
+        assets['description_lower'] = assets['description'].fillna('').str.lower()
+        assets['composite_index'] = assets['product_name_lower'] + ' ' + assets['vendor_name_lower'] + ' ' + assets['description_lower']
 
-    # Filter to only Laptops (case-insensitive)
-    purchases_laptops = purchases[purchases['asset_class'].str.lower() == 'laptop']
-    assets_laptops = assets[assets['asset_type_name'].str.lower() == 'laptop']
+        # Filter to only Laptops (case-insensitive)
+        purchases_laptops = purchases[purchases['asset_class'].str.lower() == 'laptop']
+        assets_laptops = assets[assets['asset_type_name'].str.lower() == 'laptop']
 
-    return purchases_laptops.reset_index(drop=True), assets_laptops.reset_index(drop=True)
+        logging.info("Data loaded and processed successfully.")
+        return purchases_laptops.reset_index(drop=True), assets_laptops.reset_index(drop=True)
+    except Exception as e:
+        logging.error(f"Error loading data: {e}")
+        raise
 
 # Initialize session state
 if 'purchases_df' not in st.session_state:
@@ -61,35 +71,47 @@ if 'purchases_df' not in st.session_state:
 
 # Function to save assignments
 def save_assignments():
-    with open(ASSIGNMENTS_FILE, 'w') as f:
-        json.dump(st.session_state.assignments, f, default=str)
-    st.sidebar.success("Assignments saved successfully!")
+    try:
+        with open(ASSIGNMENTS_FILE, 'w') as f:
+            json.dump(st.session_state.assignments, f, default=str)
+        st.sidebar.success("Assignments saved successfully!")
+        logging.info(f"Assignments saved to {ASSIGNMENTS_FILE}")
+    except Exception as e:
+        logging.error(f"Error saving assignments: {e}")
 
 # Function to load assignments and apply them to the assets data
 def load_assignments():
-    if ASSIGNMENTS_FILE.exists():
-        with open(ASSIGNMENTS_FILE, 'r') as f:
-            st.session_state.assignments = json.load(f)
-    else:
-        st.session_state.assignments = {}
+    try:
+        if ASSIGNMENTS_FILE.exists():
+            with open(ASSIGNMENTS_FILE, 'r') as f:
+                st.session_state.assignments = json.load(f)
+            logging.info(f"Assignments loaded from {ASSIGNMENTS_FILE}")
+        else:
+            st.session_state.assignments = {}
+            logging.info("No previous assignments found.")
 
-    # Initialize remaining counts
-    st.session_state.purchases_df['remaining_count'] = st.session_state.purchases_df['count']
+        # Initialize remaining counts
+        st.session_state.purchases_df['remaining_count'] = st.session_state.purchases_df['count']
 
-    # Reset any existing assignments in the assets DataFrame
-    st.session_state.assets_df['purchase_assignment'] = None
+        # Reset any existing assignments in the assets DataFrame
+        st.session_state.assets_df['purchase_assignment'] = None
 
-    # Apply the assignments to the assets DataFrame and update remaining counts
-    for asset_id_str, purchase_id in st.session_state.assignments.items():
-        asset_id = int(asset_id_str)
-        st.session_state.assets_df.loc[
-            st.session_state.assets_df['asset_id'] == asset_id, 'purchase_assignment'
-        ] = purchase_id
+        # Apply the assignments to the assets DataFrame and update remaining counts
+        for asset_id_str, purchase_id in st.session_state.assignments.items():
+            asset_id = int(asset_id_str)
+            st.session_state.assets_df.loc[
+                st.session_state.assets_df['asset_id'] == asset_id, 'purchase_assignment'
+            ] = purchase_id
 
-        # Decrease remaining count for the assigned purchase
-        st.session_state.purchases_df.loc[
-            st.session_state.purchases_df['purchase_id'] == purchase_id, 'remaining_count'
-        ] -= 1
+            # Decrease remaining count for the assigned purchase
+            st.session_state.purchases_df.loc[
+                st.session_state.purchases_df['purchase_id'] == purchase_id, 'remaining_count'
+            ] -= 1
+
+        logging.info("Assignments applied to assets data.")
+    except Exception as e:
+        logging.error(f"Error loading and applying assignments: {e}")
+        raise
 
 load_assignments()
 
@@ -209,64 +231,68 @@ def assign_purchase(asset, purchase):
     asset_id = asset['asset_id']
     purchase_id = purchase['purchase_id']
 
-    # Get remaining count for the purchase
-    remaining_count = st.session_state.purchases_df.loc[
-        st.session_state.purchases_df['purchase_id'] == purchase_id, 'remaining_count'
-    ].values[0]
+    try:
+        remaining_count = st.session_state.purchases_df.loc[
+            st.session_state.purchases_df['purchase_id'] == purchase_id, 'remaining_count'
+        ].values[0]
 
-    if str(asset_id) in st.session_state.assignments:
-        prev_purchase_id = st.session_state.assignments[str(asset_id)]
-        if prev_purchase_id == purchase_id:
-            st.info(f"Asset ID {asset_id} is already assigned to Purchase ID {purchase_id}.")
+        if str(asset_id) in st.session_state.assignments:
+            prev_purchase_id = st.session_state.assignments[str(asset_id)]
+            if prev_purchase_id == purchase_id:
+                st.info(f"Asset ID {asset_id} is already assigned to Purchase ID {purchase_id}.")
+                logging.info(f"Asset ID {asset_id} already assigned to Purchase ID {purchase_id}.")
+                return
+            else:
+                # Reassigning to a different purchase
+                st.session_state.purchases_df.loc[
+                    st.session_state.purchases_df['purchase_id'] == prev_purchase_id, 'remaining_count'
+                ] += 1
+
+        if remaining_count < 1:
+            st.error("Selected purchase has no remaining count.")
+            logging.error(f"Selected purchase ID {purchase_id} has no remaining count.")
             return
-        else:
-            # Reassigning to a different purchase
-            # Increase remaining count of previous purchase
-            st.session_state.purchases_df.loc[
-                st.session_state.purchases_df['purchase_id'] == prev_purchase_id, 'remaining_count'
-            ] += 1
 
-    # Check if new purchase has remaining count
-    if remaining_count < 1:
-        st.error("Selected purchase has no remaining count.")
-        return
+        st.session_state.purchases_df.loc[
+            st.session_state.purchases_df['purchase_id'] == purchase_id, 'remaining_count'
+        ] -= 1
 
-    # Decrease remaining count of new purchase
-    st.session_state.purchases_df.loc[
-        st.session_state.purchases_df['purchase_id'] == purchase_id, 'remaining_count'
-    ] -= 1
+        # Update assignment
+        st.session_state.assignments[str(asset_id)] = purchase_id
+        st.session_state.assets_df.loc[
+            st.session_state.assets_df['asset_id'] == asset_id, 'purchase_assignment'
+        ] = purchase_id
 
-    # Update assignment
-    st.session_state.assignments[str(asset_id)] = purchase_id
-
-    # Update purchase_assignment in assets_df
-    st.session_state.assets_df.loc[
-        st.session_state.assets_df['asset_id'] == asset_id, 'purchase_assignment'
-    ] = purchase_id
-
-    st.success(f"Assigned Asset ID {asset_id} to Purchase ID {purchase_id}.")
-    save_assignments()  # Save after assignment
-    st.rerun()
+        st.success(f"Assigned Asset ID {asset_id} to Purchase ID {purchase_id}.")
+        logging.info(f"Assigned Asset ID {asset_id} to Purchase ID {purchase_id}.")
+        save_assignments()
+        st.rerun()
+    except Exception as e:
+        logging.error(f"Error assigning purchase: {e}")
+        st.error("Failed to assign purchase. Check the logs for more details.")
 
 # Function to unassign a purchase from an asset
 def unassign_purchase(asset):
     asset_id = asset['asset_id']
-    if str(asset_id) in st.session_state.assignments:
-        purchase_id = int(st.session_state.assignments[str(asset_id)])
-        # Increase remaining count of the purchase
-        st.session_state.purchases_df.loc[
-            st.session_state.purchases_df['purchase_id'] == purchase_id, 'remaining_count'
-        ] += 1
-        del st.session_state.assignments[str(asset_id)]
-        # Reset purchase_assignment in assets_df
-        st.session_state.assets_df.loc[
-            st.session_state.assets_df['asset_id'] == asset_id, 'purchase_assignment'
-        ] = None
-        st.success(f"Unassigned Purchase ID {purchase_id} from Asset ID {asset_id}.")
-        save_assignments()  # Save after unassignment
-        st.rerun()
-    else:
-        st.warning("No purchase is assigned to this asset.")
+    try:
+        if str(asset_id) in st.session_state.assignments:
+            purchase_id = int(st.session_state.assignments[str(asset_id)])
+            st.session_state.purchases_df.loc[
+                st.session_state.purchases_df['purchase_id'] == purchase_id, 'remaining_count'
+            ] += 1
+            del st.session_state.assignments[str(asset_id)]
+            st.session_state.assets_df.loc[
+                st.session_state.assets_df['asset_id'] == asset_id, 'purchase_assignment'
+            ] = None
+            st.success(f"Unassigned Purchase ID {purchase_id} from Asset ID {asset_id}.")
+            logging.info(f"Unassigned Purchase ID {purchase_id} from Asset ID {asset_id}.")
+            save_assignments()
+            st.rerun()
+        else:
+            st.warning("No purchase is assigned to this asset.")
+    except Exception as e:
+        logging.error(f"Error unassigning purchase: {e}")
+        st.error("Failed to unassign purchase. Check the logs for more details.")
 
 # Prioritize assets with non-empty exact matches
 if not st.session_state.asset_order:
@@ -288,7 +314,6 @@ if st.session_state.current_asset_index < len(st.session_state.asset_order):
     asset = st.session_state.assets_df[st.session_state.assets_df['asset_id'] == asset_id].iloc[0].to_dict()
     display_asset(asset)
 
-    # Check if asset has an existing assignment
     if str(asset_id) in st.session_state.assignments:
         assigned_purchase_id = int(st.session_state.assignments[str(asset_id)])
         assigned_purchase = st.session_state.purchases_df[
@@ -297,16 +322,11 @@ if st.session_state.current_asset_index < len(st.session_state.asset_order):
 
         st.write("### This asset is already assigned to the following purchase:")
         assigned_purchase_display = assigned_purchase[['purchase_id', 'date', 'vendor', 'item', 'cost', 'remaining_count']].to_frame().T.copy()
-        # Ensure 'date' is datetime
         assigned_purchase_display['date'] = pd.to_datetime(assigned_purchase_display['date'], errors='coerce')
         assigned_purchase_display['date'] = assigned_purchase_display['date'].dt.strftime('%Y-%m-%d')
-        # Convert object columns to strings
-        for col in assigned_purchase_display.columns:
-            if assigned_purchase_display[col].dtype == 'object':
-                assigned_purchase_display[col] = assigned_purchase_display[col].astype(str)
+        assigned_purchase_display = assigned_purchase_display.astype(str)
         st.write(assigned_purchase_display)
 
-        # Navigation and action buttons in a fixed container
         button_container = st.container()
         with button_container:
             col1, col2, col3 = st.columns([1, 1, 1])
@@ -324,7 +344,6 @@ if st.session_state.current_asset_index < len(st.session_state.asset_order):
                         st.session_state.current_asset_index += 1
                         st.rerun()
     else:
-        # Find matching purchases
         exact_matches, fuzzy_matches = get_matching_purchases(asset, st.session_state.purchases_df)
         potential_purchases = display_potential_purchases(exact_matches, fuzzy_matches)
 
@@ -335,7 +354,6 @@ if st.session_state.current_asset_index < len(st.session_state.asset_order):
                 format_func=lambda x: f"Purchase ID {x}"
             )
 
-            # Navigation and action buttons in a fixed container
             button_container = st.container()
             with button_container:
                 col1, col2, col3 = st.columns([1, 1, 1])
@@ -358,7 +376,6 @@ if st.session_state.current_asset_index < len(st.session_state.asset_order):
         else:
             st.write("No purchases available to assign for this asset.")
 
-            # Navigation buttons in a fixed container
             button_container = st.container()
             with button_container:
                 col1, col2, col3 = st.columns([1, 1, 1])
@@ -368,7 +385,7 @@ if st.session_state.current_asset_index < len(st.session_state.asset_order):
                             st.session_state.current_asset_index -= 1
                             st.rerun()
                 with col2:
-                    st.write("")  # Empty placeholder
+                    st.write("")
                 with col3:
                     if st.button("Next Asset", key="next_asset"):
                         st.session_state.current_asset_index += 1
@@ -379,14 +396,21 @@ else:
 
 st.write("Navigate between assets using the buttons above or the sidebar.")
 
-# Optionally, at the end, save the updated assets data with assignments
 if st.button("Save Updated Assets Data"):
-    st.session_state.assets_df.to_csv(UPDATED_ASSETS_FILE, index=False)
-    st.success(f"Updated assets with assignments saved to {UPDATED_ASSETS_FILE}")
+    try:
+        st.session_state.assets_df.to_csv(UPDATED_ASSETS_FILE, index=False)
+        st.success(f"Updated assets with assignments saved to {UPDATED_ASSETS_FILE}")
+        logging.info(f"Updated assets data saved to {UPDATED_ASSETS_FILE}")
+    except Exception as e:
+        logging.error(f"Error saving updated assets data: {e}")
+        st.error("Failed to save updated assets data. Check the logs for more details.")
 
-# Add a "Finish" button that will end the Streamlit session
 if st.button("Finish"):
-    # Create a flag file that indicates the Streamlit session is done
-    with open(FLAG_FILE, 'w') as flag_file:
-        flag_file.write("done")
-    st.success("Process completed. You can now exit Streamlit and resume the pipeline.")
+    try:
+        with open(FLAG_FILE, 'w') as flag_file:
+            flag_file.write("done")
+        st.success("Process completed. You can now exit Streamlit and resume the pipeline.")
+        logging.info(f"Streamlit session marked as completed with flag file {FLAG_FILE}")
+    except Exception as e:
+        logging.error(f"Error creating flag file: {e}")
+        st.error("Failed to finish the process. Check the logs for more details.")

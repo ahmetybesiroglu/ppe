@@ -1,9 +1,15 @@
+# src/push_to_assets.py
+
 import os
+import logging
 from dotenv import load_dotenv
 from pyairtable import Api
 import pandas as pd
 from datetime import datetime, timezone
 from pathlib import Path
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Load environment variables
 load_dotenv()
@@ -33,13 +39,19 @@ def parse_date(date_string):
             # Fallback to parsing just the date portion
             return datetime.strptime(date_string[:10], '%Y-%m-%d').strftime('%Y-%m-%d')
         except ValueError:
-            print(f"Warning: Could not parse date {date_string}")
+            logging.warning(f"Could not parse date: {date_string}")
             return None
 
 def load_assets_data():
     """Load assets data from CSV file."""
     file_path = DATA_DIR / "assets_data_cleaned.csv"
-    return pd.read_csv(file_path)
+    try:
+        assets_df = pd.read_csv(file_path)
+        logging.info(f"Loaded assets data from {file_path}")
+        return assets_df
+    except FileNotFoundError as e:
+        logging.error(f"File not found: {file_path}. Error: {e}")
+        raise
 
 def create_or_update_asset(row):
     """Create or update an asset record in Airtable."""
@@ -59,29 +71,32 @@ def create_or_update_asset(row):
     # Remove any fields with None values
     fields = {k: v for k, v in fields.items() if v is not None}
 
-    # Check if record already exists
-    existing_records = assets_table.all(fields=['asset_id'], formula=f"{{asset_id}}='{fields['asset_id']}'")
+    try:
+        # Check if record already exists
+        existing_records = assets_table.all(fields=['asset_id'], formula=f"{{asset_id}}='{fields['asset_id']}'")
 
-    if existing_records:
-        # Update existing record
-        record_id = existing_records[0]['id']
-        assets_table.update(record_id, fields)
-        print(f"Updated asset: {fields['name']}")
-    else:
-        # Create new record
-        new_record = assets_table.create(fields)
-        print(f"Created new asset: {fields['display_id']}")
+        if existing_records:
+            # Update existing record
+            record_id = existing_records[0]['id']
+            assets_table.update(record_id, fields)
+            logging.info(f"Updated asset: {fields['name']}")
+        else:
+            # Create new record
+            new_record = assets_table.create(fields)
+            logging.info(f"Created new asset: {fields['display_id']}")
+    except Exception as e:
+        logging.error(f"Error creating/updating asset {row['display_id']}: {e}")
 
 def main():
-    assets_df = load_assets_data()
+    try:
+        assets_df = load_assets_data()
 
-    for _, row in assets_df.iterrows():
-        try:
+        for _, row in assets_df.iterrows():
             create_or_update_asset(row)
-        except Exception as e:
-            print(f"Error processing asset {row['display_id']}: {str(e)}")
 
-    print("Assets upload completed.")
+        logging.info("Assets upload completed.")
+    except Exception as e:
+        logging.error(f"Error in main execution: {e}")
 
 if __name__ == "__main__":
     main()

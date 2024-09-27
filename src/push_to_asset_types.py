@@ -1,8 +1,14 @@
+# src/push_to_asset_types.py
+
 import os
+import logging
 from dotenv import load_dotenv
 from pyairtable import Api
 import pandas as pd
 from pathlib import Path
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Load environment variables
 load_dotenv()
@@ -25,7 +31,13 @@ id_mapping = {}
 def load_asset_types_data():
     """Load asset types data from CSV file."""
     file_path = DATA_DIR / "asset_types_data.csv"
-    return pd.read_csv(file_path)
+    try:
+        asset_types_df = pd.read_csv(file_path)
+        logging.info(f"Loaded asset types data from {file_path}")
+        return asset_types_df
+    except FileNotFoundError as e:
+        logging.error(f"File not found: {file_path}. Error: {e}")
+        raise
 
 def create_or_update_asset_type(row):
     """Create or update an asset type record in Airtable."""
@@ -35,20 +47,23 @@ def create_or_update_asset_type(row):
         "note": row['description'] if pd.notna(row['description']) else None,
     }
 
-    # Check if record already exists
-    existing_records = asset_types_table.all(fields=['asset_type_id'], formula=f"{{asset_type_id}}='{fields['asset_type_id']}'")
+    try:
+        # Check if record already exists
+        existing_records = asset_types_table.all(fields=['asset_type_id'], formula=f"{{asset_type_id}}='{fields['asset_type_id']}'")
 
-    if existing_records:
-        # Update existing record
-        record_id = existing_records[0]['id']
-        asset_types_table.update(record_id, fields)
-        print(f"Updated asset type: {fields['name']}")
-        id_mapping[str(row['id'])] = record_id
-    else:
-        # Create new record
-        new_record = asset_types_table.create(fields)
-        print(f"Created new asset type: {fields['name']}")
-        id_mapping[str(row['id'])] = new_record['id']
+        if existing_records:
+            # Update existing record
+            record_id = existing_records[0]['id']
+            asset_types_table.update(record_id, fields)
+            logging.info(f"Updated asset type: {fields['name']}")
+            id_mapping[str(row['id'])] = record_id
+        else:
+            # Create new record
+            new_record = asset_types_table.create(fields)
+            logging.info(f"Created new asset type: {fields['name']}")
+            id_mapping[str(row['id'])] = new_record['id']
+    except Exception as e:
+        logging.error(f"Error creating/updating asset type: {row['name']}. Error: {e}")
 
 def update_parent_links(asset_types_df):
     """Update parent asset type links after all records are created."""
@@ -59,20 +74,26 @@ def update_parent_links(asset_types_df):
                 fields = {
                     "parent_asset_type": [id_mapping[parent_id]]
                 }
-                asset_types_table.update(id_mapping[str(row['id'])], fields)
-                print(f"Updated parent link for asset type: {row['name']}")
+                try:
+                    asset_types_table.update(id_mapping[str(row['id'])], fields)
+                    logging.info(f"Updated parent link for asset type: {row['name']}")
+                except Exception as e:
+                    logging.error(f"Error updating parent link for asset type: {row['name']}. Error: {e}")
 
 def main():
-    asset_types_df = load_asset_types_data()
+    try:
+        asset_types_df = load_asset_types_data()
 
-    # First pass: create or update all records without parent links
-    for _, row in asset_types_df.iterrows():
-        create_or_update_asset_type(row)
+        # First pass: create or update all records without parent links
+        for _, row in asset_types_df.iterrows():
+            create_or_update_asset_type(row)
 
-    # Second pass: update parent links
-    update_parent_links(asset_types_df)
+        # Second pass: update parent links
+        update_parent_links(asset_types_df)
 
-    print("Asset types upload completed.")
+        logging.info("Asset types upload completed.")
+    except Exception as e:
+        logging.error(f"Error in main execution: {e}")
 
 if __name__ == "__main__":
     main()

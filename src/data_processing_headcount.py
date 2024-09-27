@@ -1,14 +1,20 @@
 # src/data_processing_headcount.py
+
 import pandas as pd
 from pathlib import Path
+import logging
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def load_csv(filepath):
     """Loads a CSV file into a pandas DataFrame."""
     file_path = Path(filepath)
     if file_path.exists() and file_path.suffix == '.csv':
-        print(f"Loading data from {file_path}...")
+        logging.info(f"Loading data from {file_path}...")
         return pd.read_csv(file_path)
     else:
+        logging.error(f"The file {file_path} does not exist or is not a CSV file.")
         raise FileNotFoundError(f"The file {file_path} does not exist or is not a CSV file.")
 
 def filter_employees(df):
@@ -16,7 +22,7 @@ def filter_employees(df):
     Filters the DataFrame to include relevant columns and only active employees.
     Also, removes rows with empty first_name and last_name columns.
     """
-    print("Filtering employees and selecting required columns...")
+    logging.info("Filtering employees and selecting required columns...")
 
     # Select relevant columns
     employee_df = df[['first_name', 'last_name', 'masterworks_email', 'status', 'employee_type', 'title',
@@ -32,9 +38,10 @@ def filter_employees(df):
 
 def clean_names(df):
     """Strips any leading/trailing whitespace from 'first_name', 'last_name', and 'masterworks_email'."""
-    print("Stripping whitespace from 'first_name', 'last_name', and 'masterworks_email' columns...")
+    logging.info("Stripping whitespace from 'first_name', 'last_name', and 'masterworks_email' columns...")
 
     if 'masterworks_email' not in df.columns:
+        logging.error("'masterworks_email' column not found in the DataFrame.")
         raise KeyError("'masterworks_email' column not found in the DataFrame.")
 
     # Convert the columns to string and handle NaN values before stripping whitespace
@@ -46,27 +53,27 @@ def clean_names(df):
 
 def add_full_name(df):
     """Adds a 'full_name' column by combining 'first_name' and 'last_name'."""
-    print("Adding 'Full Name' column...")
+    logging.info("Adding 'Full Name' column...")
     df['full_name'] = df['first_name'] + ' ' + df['last_name']
     return df
 
 def sort_by_last_name(df):
     """Sorts the DataFrame by 'last_name'."""
-    print("Sorting by 'last_name'...")
+    logging.info("Sorting by 'last_name'...")
     return df.sort_values(by='last_name')
 
 def add_employee_id(df):
     """Adds an 'employee_id' column with values from 1 to n."""
-    print("Adding 'employee_id' column...")
+    logging.info("Adding 'employee_id' column...")
     df.insert(0, 'employee_id', range(1, len(df) + 1))
     return df
 
 def save_to_csv(df, output_filepath):
     """Saves the DataFrame to a CSV file."""
     output_path = Path(output_filepath)
-    print(f"Saving the modified data to {output_path}...")
+    logging.info(f"Saving the modified data to {output_path}...")
     df.to_csv(output_path, index=False)
-    print(f"Data saved successfully to {output_path}")
+    logging.info(f"Data saved successfully to {output_path}")
 
 def process_headcount_data(input_filepath, output_filepath):
     """Main function to load, filter, process, and save headcount data."""

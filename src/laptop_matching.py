@@ -1,7 +1,13 @@
+# src/laptop_matching.py
+
 import pandas as pd
 from rapidfuzz import fuzz
 from pathlib import Path
 import json
+import logging
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 PURCHASES_FILE = DATA_DIR / "netsuite_data_cleaned.csv"
@@ -9,50 +15,43 @@ ASSETS_FILE = DATA_DIR / "assets_data_cleaned.csv"
 OUTPUT_FILE = DATA_DIR / "assets_data_with_assignments.csv"
 ASSIGNMENTS_FILE = DATA_DIR / "asset_purchase_assignments.json"
 
-
 def enforce_data_types(df):
     """
     Ensure that ID columns, asset tags, and other relevant fields are integers (or strings if needed),
     while preserving empty values as NaN (and not filling them with 0).
     """
-    # Define columns that should be integers or strings
     int_columns = ['purchase_id', 'asset_type_id', 'asset_id', 'vendor_id', 'vendor', 'product_id', 'display_id', 'count']
     str_columns = ['asset_tag', 'serial_number', 'uuid', 'vendor_name', 'product_name']
 
-    # Ensure columns that should be integers are integers but keep NaNs as NaNs
     for col in int_columns:
         if col in df.columns:
-            # Convert to numeric, allowing NaNs, and then to Int64 to support NaNs
             df[col] = pd.to_numeric(df[col], errors='coerce').astype('Int64')
 
-    # Ensure columns that should be strings are strings
     for col in str_columns:
         if col in df.columns:
             df[col] = df[col].astype(str)
 
     return df
 
-
 # Load data
 def load_data():
     purchases_df = pd.read_csv(PURCHASES_FILE)
     assets_df = pd.read_csv(ASSETS_FILE)
 
-    # Handle potential column name differences or missing columns in purchases_df
     if 'vendor' not in purchases_df.columns:
         if 'vendor_name' in purchases_df.columns:
             purchases_df['vendor'] = purchases_df['vendor_name']
         else:
-            raise KeyError("Column 'vendor' not found in purchases_df. Available columns: " + ', '.join(purchases_df.columns))
+            raise KeyError(f"Column 'vendor' not found in purchases_df. Available columns: {', '.join(purchases_df.columns)}")
 
     if 'item' not in purchases_df.columns:
         if 'product_name' in purchases_df.columns:
             purchases_df['item'] = purchases_df['product_name']
         else:
-            raise KeyError("Column 'item' not found in purchases_df. Available columns: " + ', '.join(purchases_df.columns))
+            raise KeyError(f"Column 'item' not found in purchases_df. Available columns: {', '.join(purchases_df.columns)}")
 
     if 'description' not in purchases_df.columns:
-        raise KeyError("Column 'description' not found in purchases_df. Available columns: " + ', '.join(purchases_df.columns))
+        raise KeyError(f"Column 'description' not found in purchases_df. Available columns: {', '.join(purchases_df.columns)}")
 
     purchases_df['vendor_lower'] = purchases_df['vendor'].fillna('').str.lower()
     purchases_df['item_lower'] = purchases_df['item'].fillna('').str.lower()
@@ -67,7 +66,7 @@ def load_data():
     if 'count' in purchases_df.columns:
         purchases_df['remaining_count'] = purchases_df['count']
     else:
-        raise KeyError("Column 'count' not found in purchases_df. Available columns: " + ', '.join(purchases_df.columns))
+        raise KeyError(f"Column 'count' not found in purchases_df. Available columns: {', '.join(purchases_df.columns)}")
 
     return purchases_df, assets_df
 
@@ -119,17 +118,16 @@ def auto_match_assets(purchases_df, assets_df):
 
             purchases_df.loc[purchases_df['purchase_id'] == match['purchase_id'], 'remaining_count'] -= 1
 
-            # Add the asset-purchase pair to the dictionary
             asset_purchase_assignments[asset['asset_id']] = int(match['purchase_id'])
         else:
             assets_df.at[i, 'purchase_assignment'] = None
 
-    print(f"Total assets to match: {total_assets}")
-    print(f"Total purchase items to match against (based on count): {total_purchase_items}")
-    print(f"Total matched assets: {matched_count}")
-    print(f"Exact matches: {exact_matches_count}")
-    print(f"Fuzzy matches: {fuzzy_matches_count}")
-    print(f"Unmatched assets: {total_assets - matched_count}")
+    logging.info(f"Total assets to match: {total_assets}")
+    logging.info(f"Total purchase items to match against (based on count): {total_purchase_items}")
+    logging.info(f"Total matched assets: {matched_count}")
+    logging.info(f"Exact matches: {exact_matches_count}")
+    logging.info(f"Fuzzy matches: {fuzzy_matches_count}")
+    logging.info(f"Unmatched assets: {total_assets - matched_count}")
 
     return assets_df, asset_purchase_assignments
 
@@ -137,23 +135,22 @@ def auto_match_assets(purchases_df, assets_df):
 def save_assignments_to_json(assignments, output_file):
     with open(output_file, 'w') as json_file:
         json.dump(assignments, json_file, indent=4)
-    print(f"Asset-purchase assignments saved to {output_file}")
+    logging.info(f"Asset-purchase assignments saved to {output_file}")
 
 # Main function to load data, match assets, and save output
 def main():
     purchases_df, assets_df = load_data()
 
-    print("Starting automatic matching...")
+    logging.info("Starting automatic matching...")
 
     assets_df, asset_purchase_assignments = auto_match_assets(purchases_df, assets_df)
 
-    # Apply data type enforcement one last time before saving
     assets_df = enforce_data_types(assets_df)
     assets_df['purchase_assignment'] = assets_df['purchase_assignment'].astype('Int64')
 
     # Save the matched data to CSV
     assets_df.to_csv(OUTPUT_FILE, index=False)
-    print(f"Automatic matching completed. Results saved to {OUTPUT_FILE}")
+    logging.info(f"Automatic matching completed. Results saved to {OUTPUT_FILE}")
 
     # Save asset-purchase assignments to JSON
     save_assignments_to_json(asset_purchase_assignments, ASSIGNMENTS_FILE)

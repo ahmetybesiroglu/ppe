@@ -1,8 +1,14 @@
+# src/push_to_employees.py
+
 import os
+import logging
 from dotenv import load_dotenv
 from pyairtable import Api
 import pandas as pd
 from pathlib import Path
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Load environment variables
 load_dotenv()
@@ -22,7 +28,13 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 def load_employees_data():
     """Load employees data from CSV file."""
     file_path = DATA_DIR / "filtered_active_employees.csv"
-    return pd.read_csv(file_path)
+    try:
+        employees_df = pd.read_csv(file_path)
+        logging.info(f"Loaded employees data from {file_path}")
+        return employees_df
+    except FileNotFoundError as e:
+        logging.error(f"File not found: {file_path}. Error: {e}")
+        raise
 
 # Example mappings if needed (optional)
 STATUS_MAPPING = {
@@ -59,29 +71,35 @@ def create_or_update_employee(row):
     # Remove any fields with None values
     fields = {k: v for k, v in fields.items() if v is not None}
 
-    # Check if record already exists
-    existing_records = employees_table.all(fields=['employee_id'], formula=f"{{employee_id}}='{fields['employee_id']}'")
+    try:
+        # Check if record already exists
+        existing_records = employees_table.all(fields=['employee_id'], formula=f"{{employee_id}}='{fields['employee_id']}'")
 
-    if existing_records:
-        # Update existing record
-        record_id = existing_records[0]['id']
-        employees_table.update(record_id, fields)
-        print(f"Updated employee: {fields['first_name']} {fields['last_name']}")
-    else:
-        # Create new record
-        new_record = employees_table.create(fields)
-        print(f"Created new employee: {fields['first_name']} {fields['last_name']}")
+        if existing_records:
+            # Update existing record
+            record_id = existing_records[0]['id']
+            employees_table.update(record_id, fields)
+            logging.info(f"Updated employee: {fields['first_name']} {fields['last_name']}")
+        else:
+            # Create new record
+            new_record = employees_table.create(fields)
+            logging.info(f"Created new employee: {fields['first_name']} {fields['last_name']}")
+    except Exception as e:
+        logging.error(f"Error creating/updating employee: {row['first_name']} {row['last_name']}. Error: {e}")
 
 def main():
-    employees_df = load_employees_data()
+    try:
+        employees_df = load_employees_data()
 
-    for _, row in employees_df.iterrows():
-        try:
-            create_or_update_employee(row)
-        except Exception as e:
-            print(f"Error processing employee {row['first_name']} {row['last_name']}: {str(e)}")
+        for _, row in employees_df.iterrows():
+            try:
+                create_or_update_employee(row)
+            except Exception as e:
+                logging.error(f"Error processing employee {row['first_name']} {row['last_name']}: {str(e)}")
 
-    print("Employees upload completed.")
+        logging.info("Employees upload completed.")
+    except Exception as e:
+        logging.error(f"Error in main execution: {e}")
 
 if __name__ == "__main__":
     main()

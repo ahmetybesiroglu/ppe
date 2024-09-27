@@ -1,9 +1,15 @@
+# src/push_to_purchases.py
+
 import os
+import logging
 from dotenv import load_dotenv
 from pyairtable import Api
 import pandas as pd
 from pathlib import Path
 from datetime import datetime, timezone
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Load environment variables
 load_dotenv()
@@ -23,7 +29,13 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 def load_purchases_data():
     """Load purchases data from CSV file."""
     file_path = DATA_DIR / "netsuite_data_cleaned.csv"
-    return pd.read_csv(file_path)
+    try:
+        purchases_df = pd.read_csv(file_path)
+        logging.info(f"Loaded purchases data from {file_path}")
+        return purchases_df
+    except FileNotFoundError as e:
+        logging.error(f"File not found: {file_path}. Error: {e}")
+        raise
 
 def parse_date(date_string):
     if pd.isna(date_string):
@@ -38,7 +50,7 @@ def parse_date(date_string):
             # Fallback to parsing just the date portion
             return datetime.strptime(date_string[:10], '%Y-%m-%d').strftime('%Y-%m-%d')
         except ValueError:
-            print(f"Warning: Could not parse date {date_string}")
+            logging.warning(f"Could not parse date {date_string}")
             return None
 
 def create_or_update_purchase(row):
@@ -57,29 +69,35 @@ def create_or_update_purchase(row):
     # Remove any fields with None values
     fields = {k: v for k, v in fields.items() if v is not None}
 
-    # Check if record already exists
-    existing_records = purchases_table.all(fields=['purchase_id'], formula=f"{{purchase_id}}='{fields['purchase_id']}'")
+    try:
+        # Check if record already exists
+        existing_records = purchases_table.all(fields=['purchase_id'], formula=f"{{purchase_id}}='{fields['purchase_id']}'")
 
-    if existing_records:
-        # Update existing record
-        record_id = existing_records[0]['id']
-        purchases_table.update(record_id, fields)
-        print(f"Updated purchase: {fields['purchase_id']}")
-    else:
-        # Create new record
-        new_record = purchases_table.create(fields)
-        print(f"Created new purchase: {fields['purchase_id']}")
+        if existing_records:
+            # Update existing record
+            record_id = existing_records[0]['id']
+            purchases_table.update(record_id, fields)
+            logging.info(f"Updated purchase: {fields['purchase_id']}")
+        else:
+            # Create new record
+            new_record = purchases_table.create(fields)
+            logging.info(f"Created new purchase: {fields['purchase_id']}")
+    except Exception as e:
+        logging.error(f"Error creating/updating purchase: {row['purchase_id']}. Error: {e}")
 
 def main():
-    purchases_df = load_purchases_data()
+    try:
+        purchases_df = load_purchases_data()
 
-    for _, row in purchases_df.iterrows():
-        try:
-            create_or_update_purchase(row)
-        except Exception as e:
-            print(f"Error processing purchase {row['purchase_id']}: {str(e)}")
+        for _, row in purchases_df.iterrows():
+            try:
+                create_or_update_purchase(row)
+            except Exception as e:
+                logging.error(f"Error processing purchase {row['purchase_id']}: {str(e)}")
 
-    print("Purchases upload completed.")
+        logging.info("Purchases upload completed.")
+    except Exception as e:
+        logging.error(f"Error in main execution: {e}")
 
 if __name__ == "__main__":
     main()
