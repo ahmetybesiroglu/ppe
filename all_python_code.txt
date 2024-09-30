@@ -1,0 +1,2741 @@
+# Contents of # file_order.txt
+
+
+# Contents of
+# file_order.txt
+
+data_retrieval_freshservice.py
+data_retrieval_airtable.py
+data_processing_freshservice.py
+data_processing_headcount.py
+data_standardization.py
+laptop_matching.py
+matching_streamlit_app.py
+headcount_matching.py
+push_to_asset_types.py
+push_to_departments.py
+push_vendors.py
+push_to_products.py
+push_to_purchases.py
+push_to_assets.py
+link_tables.py
+
+
+# Contents of data_retrieval_freshservice.py
+# src/data_retrieval_freshservice.py
+
+import os
+import requests
+import pandas as pd
+from dotenv import load_dotenv
+import base64
+from pathlib import Path
+import json
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+import logging
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def load_env_variables():
+    """Load environment variables from the .env file."""
+    load_dotenv()
+    env_vars = {
+        'FRESHSERVICE_DOMAIN': os.getenv('FRESHSERVICE_DOMAIN'),
+        'FRESHSERVICE_API_KEY': os.getenv('FRESHSERVICE_API_KEY')
+    }
+
+    # Check if necessary environment variables are loaded
+    if not env_vars['FRESHSERVICE_DOMAIN']:
+        logging.error("Missing Freshservice domain. Please check your .env file.")
+        raise ValueError("FRESHSERVICE_DOMAIN is not set. Please check your .env file.")
+
+    if not env_vars['FRESHSERVICE_API_KEY']:
+        logging.error("Missing Freshservice API key. Please check your .env file.")
+        raise ValueError("FRESHSERVICE_API_KEY is not set. Please check your .env file.")
+
+    logging.info("Environment variables loaded successfully.")
+    return env_vars
+
+# Ensure 'data' folder exists
+def ensure_data_dir():
+    """Ensure the 'data' folder exists."""
+    data_dir = Path("data")
+    data_dir.mkdir(parents=True, exist_ok=True)
+    logging.info(f"Data directory is set up at {data_dir}")
+    return data_dir
+
+# Configure retries with backoff
+def configure_retry_session(retries=5, backoff_factor=1, status_forcelist=(502, 503, 504)):
+    """Create a session with retry behavior for robust data fetching."""
+    session = requests.Session()
+    retry = Retry(
+        total=retries,
+        read=retries,
+        connect=retries,
+        backoff_factor=backoff_factor,
+        status_forcelist=status_forcelist,
+        allowed_methods=["GET"]
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount('https://', adapter)
+    session.mount('http://', adapter)
+    logging.info("Retry session configured for API requests.")
+    return session
+
+# Create headers for API request
+def create_headers(api_key):
+    """Generate headers for API requests."""
+    auth_header_value = base64.b64encode(f"{api_key}:X".encode()).decode()
+    logging.info("API request headers created.")
+    return {
+        'Authorization': f'Basic {auth_header_value}',
+        'Content-Type': 'application/json'
+    }
+
+# Convert column names to snake_case
+def convert_columns_to_snake_case(df):
+    """Convert DataFrame column names to snake_case."""
+    df.columns = df.columns.str.replace(' ', '_').str.replace('-', '_').str.lower()
+    logging.info("Column names converted to snake_case.")
+    return df
+
+# Fetch paginated data with dynamic response key detection
+def fetch_paginated_data(url, headers, session):
+    """Fetch paginated data from a specific URL."""
+    all_data = []
+    page = 1
+    while True:
+        paginated_url = f"{url}&page={page}"
+        logging.info(f"Fetching page {page} from Freshservice API...")
+        try:
+            response = session.get(paginated_url, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+
+            # Find the first key that contains a list of records
+            response_key = next((key for key, value in data.items() if isinstance(value, list)), None)
+
+            if not response_key or not data[response_key]:
+                logging.info(f"No more records found. Total pages fetched: {page-1}")
+                break
+
+            all_data.extend(data[response_key])
+            page += 1
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Failed to fetch data from page {page}: {e}")
+            break
+
+    logging.info(f"Total records fetched: {len(all_data)}")
+    return all_data
+
+# Save data to CSV with merging
+def save_to_csv(new_data, filename, data_dir):
+    """Save new data to CSV and merge with existing data if needed."""
+    csv_path = data_dir / filename
+    if csv_path.exists():
+        logging.info(f"File {filename} already exists. Merging new data...")
+        existing_df = pd.read_csv(csv_path)
+        if new_data:
+            new_df = pd.DataFrame(new_data)
+            new_df = convert_columns_to_snake_case(new_df)
+            combined_df = pd.concat([existing_df, new_df]).drop_duplicates().reset_index(drop=True)
+            combined_df.to_csv(csv_path, index=False)
+            logging.info(f"Data merged and saved to {csv_path}")
+            return combined_df
+        else:
+            logging.info(f"No new data to merge for {filename}.")
+            return existing_df
+    else:
+        if new_data:
+            new_df = pd.DataFrame(new_data)
+            new_df = convert_columns_to_snake_case(new_df)
+            new_df.to_csv(csv_path, index=False)
+            logging.info(f"New data saved to {csv_path}")
+            return new_df
+        else:
+            logging.warning(f"No data available for {filename}.")
+            return None
+
+# Download data from a specified endpoint
+def download_data(endpoint, filename, base_url, headers, data_dir, session):
+    """Download data from an API endpoint and save to CSV."""
+    csv_path = data_dir / filename
+    if csv_path.exists():
+        logging.info(f"Loading existing data from {filename}.")
+        return pd.read_csv(csv_path)
+
+    # Determine whether to add query parameters
+    if '?' in endpoint:
+        url = base_url + f"{endpoint}&per_page=30"
+    else:
+        url = base_url + f"{endpoint}?per_page=30"
+
+    new_data = fetch_paginated_data(url, headers, session)
+    return save_to_csv(new_data, filename, data_dir)
+
+# Fetch additional data (e.g., components, requests, contracts)
+def fetch_additional_data(display_id, data_types, base_url, headers, session):
+    """Fetch additional asset-related data."""
+    additional_data = {}
+
+    for data_type in data_types:
+        url = f"{base_url}assets/{display_id}/{data_type}"
+        try:
+            data = fetch_data_from_url(url, display_id, headers, session)
+            additional_data[data_type] = data if data else None
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Error fetching {data_type} for asset {display_id}: {e}")
+            additional_data[data_type] = None
+
+    return additional_data
+
+# General function to fetch data from a URL
+def fetch_data_from_url(url, display_id, headers, session):
+    """Fetch data from a specific URL."""
+    try:
+        response = session.get(url, headers=headers)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.SSLError as e:
+        logging.error(f"SSL error for asset {display_id}: {e}")
+        return None
+    except requests.exceptions.RequestException as err:
+        logging.error(f"Error fetching data for asset {display_id}: {err}")
+        return None
+
+# Create a unified DataFrame for all assets and their additional data
+def create_unified_dataframe(asset_df, data_types, base_url, headers, session):
+    """Create a unified DataFrame for all assets with additional data."""
+    asset_data = []
+    data_dir = ensure_data_dir()
+
+    unified_filename = 'assets_data_associates.csv'
+    unified_file_path = data_dir / unified_filename
+    if unified_file_path.exists():
+        logging.info(f"Unified data file {unified_filename} already exists. Loading data.")
+        return pd.read_csv(unified_file_path)
+
+    for _, row in asset_df.iterrows():
+        display_id = row['display_id']
+        logging.info(f"Fetching additional data for asset with Display ID: {display_id}...")
+
+        asset_row = {'display_id': display_id}
+        additional_data = fetch_additional_data(display_id, data_types, base_url, headers, session)
+
+        for data_type, data_value in additional_data.items():
+            asset_row[data_type] = json.dumps(data_value)
+
+        asset_data.append(asset_row)
+
+    unified_df = pd.DataFrame(asset_data)
+    unified_df = convert_columns_to_snake_case(unified_df)
+    unified_df.to_csv(unified_file_path, index=False)
+    logging.info(f"Unified data saved to {unified_file_path}")
+
+    return unified_df
+
+def main():
+    logging.info("Starting data pipeline...")
+
+    # Step 0: Ensure data directory exists
+    data_dir = ensure_data_dir()
+
+    # Step 1: Load environment variables
+    env_vars = load_env_variables()
+
+    # Step 2: Create API headers
+    headers = create_headers(env_vars['FRESHSERVICE_API_KEY'])
+
+    # Step 3: Configure retry session for API requests
+    session = configure_retry_session()
+
+    # Set Freshservice base URL
+    base_url = f"https://{env_vars['FRESHSERVICE_DOMAIN']}/api/v2/"
+
+    # Step 4: Download various data
+    logging.info("Starting to download asset data...")
+    asset_df = download_data('assets?include=type_fields&order_by=created_at&order_type=asc', 'assets_data.csv', base_url, headers, data_dir, session)
+
+    logging.info("Downloading requesters data...")
+    download_data('requesters', 'requesters_data.csv', base_url, headers, data_dir, session)
+
+    logging.info("Downloading vendors data...")
+    download_data('vendors', 'vendors_data.csv', base_url, headers, data_dir, session)
+
+    logging.info("Downloading products data...")
+    download_data('products', 'products_data.csv', base_url, headers, data_dir, session)
+
+    logging.info("Downloading asset types data...")
+    download_data('asset_types', 'asset_types_data.csv', base_url, headers, data_dir, session)
+
+    logging.info("Downloading departments data...")
+    download_data('departments', 'departments_data.csv', base_url, headers, data_dir, session)
+
+    # # Step 5: Fetch additional data for assets
+    # additional_data_types = ["components", "requests", "contracts", "relationships"]
+
+    # if asset_df is not None:
+    #     logging.info("Creating a unified dataframe with additional asset data...")
+    #     create_unified_dataframe(asset_df, additional_data_types, base_url, headers, session)
+
+    logging.info("Data pipeline completed successfully.")
+
+if __name__ == "__main__":
+    main()
+
+
+# Contents of data_retrieval_airtable.py
+# src/data_retrieval_airtable.py
+
+import os
+import pandas as pd
+from dotenv import load_dotenv
+from pyairtable import Api
+from pathlib import Path
+import logging
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Function to load environment variables
+def load_env_variables():
+    """Load environment variables from the .env file."""
+    load_dotenv()
+    env_vars = {
+        'AIRTABLE_API_KEY': os.getenv('AIRTABLE_API_KEY'),
+        'SANDBOX_BASE_ID': os.getenv('SANDBOX_BASE_ID'),
+        'HEADCOUNTTRACKER_BASE_ID': os.getenv('HEADCOUNTTRACKER_BASE_ID'),
+        'NETSUITE_TABLE_ID': os.getenv('NETSUITE_TABLE_ID'),
+        'HEADCOUNT_TABLE_ID': os.getenv('HEADCOUNT_TABLE_ID'),
+        'FILEWAVE_TABLE_ID': os.getenv('FILEWAVE_TABLE_ID'),
+    }
+
+    # Check if necessary environment variables are loaded
+    for key, value in env_vars.items():
+        if not value:
+            logging.error(f"{key} is not set. Please check your .env file.")
+            raise ValueError(f"{key} is not set. Please check your .env file.")
+
+    logging.info("Environment variables loaded successfully.")
+    return env_vars
+
+# Function to initialize the Airtable API
+def init_airtable_api(api_key):
+    """Initialize the Airtable API."""
+    logging.info("Airtable API initialized.")
+    return Api(api_key)
+
+# Function to convert column names to snake_case
+def convert_columns_to_snake_case(df):
+    """Convert DataFrame column names to snake_case."""
+    df.columns = df.columns.str.replace(' ', '_').str.replace('-', '_').str.lower()
+    logging.info("Column names converted to snake_case.")
+    return df
+
+# Function to clean double quotes from specific columns
+def clean_quotes(df, columns):
+    """Remove all double quotes from specified columns in a DataFrame."""
+    for column in columns:
+        if column in df.columns:
+            df[column] = df[column].str.replace(r'"', '', regex=True).str.strip()
+    logging.info(f"Cleaned quotes from columns: {columns}")
+    return df
+
+# Function to fetch data from Airtable and save it to a CSV file
+def fetch_and_save_airtable_data(api, base_id, table_id, data_dir, filename, add_purchase_id=False, date_column=None):
+    """Fetch data from Airtable table, sort by date, and save it as a CSV with optional purchase_id."""
+    csv_path = data_dir / filename
+    if csv_path.exists():
+        logging.info(f"{filename} already exists. Skipping API call.")
+        return pd.read_csv(csv_path)
+
+    logging.info(f"Fetching data from table {table_id}...")
+
+    # Get records from the specified table
+    table = api.table(base_id, table_id)
+    records = table.all()
+
+    # Extract fields from records
+    data = [record['fields'] for record in records]
+
+    # Convert to DataFrame
+    df = pd.DataFrame(data)
+
+    # Convert column names to snake_case
+    df = convert_columns_to_snake_case(df)
+
+    # Sort the data by date if a date_column is provided
+    if date_column and date_column in df.columns:
+        df[date_column] = pd.to_datetime(df[date_column], errors='coerce')  # Ensure the column is in datetime format
+        df = df.sort_values(by=date_column, ascending=True)  # Sort from old to new
+        logging.info(f"Data sorted by {date_column}.")
+
+    # Add purchase_id column if requested
+    if add_purchase_id:
+        df.insert(0, 'purchase_id', range(1, len(df) + 1))
+        logging.info("Added 'purchase_id' column.")
+
+    # Save to CSV
+    df.to_csv(csv_path, index=False)
+    logging.info(f"Data saved to {csv_path}")
+    return df
+
+# Main function to load environment variables, fetch and save data
+def main(data_dir=None):
+    # If data_dir is not provided, use the default path
+    if data_dir is None:
+        data_dir = Path(__file__).resolve().parent.parent / "data"
+
+    # Ensure the data directory exists
+    data_dir.mkdir(parents=True, exist_ok=True)
+    logging.info(f"Data directory ensured at {data_dir}")
+
+    # Step 1: Load environment variables
+    env_vars = load_env_variables()
+
+    # Step 2: Initialize the Airtable API
+    api = init_airtable_api(env_vars['AIRTABLE_API_KEY'])
+
+    # Step 3: Fetch and save data for each table
+    # For NetSuite, we are adding purchase_id and sorting by the 'date' column (adjust this to your actual column name)
+    fetch_and_save_airtable_data(api, env_vars['SANDBOX_BASE_ID'], env_vars['NETSUITE_TABLE_ID'], data_dir, 'netsuite_data.csv', add_purchase_id=True, date_column='date')
+    fetch_and_save_airtable_data(api, env_vars['HEADCOUNTTRACKER_BASE_ID'], env_vars['HEADCOUNT_TABLE_ID'], data_dir, 'headcount_data.csv')
+    fetch_and_save_airtable_data(api, env_vars['SANDBOX_BASE_ID'], env_vars['FILEWAVE_TABLE_ID'], data_dir, 'filewave_data.csv')
+
+# Run the script if it's the main program
+if __name__ == "__main__":
+    main()  # This will use the default data directory when run standalone
+
+
+# Contents of data_processing_freshservice.py
+# src/data_processing_freshservice.py
+
+import pandas as pd
+import ast
+import re
+from pathlib import Path
+import logging
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Function to load the CSV file
+def load_csv(file_path):
+    """Load a CSV file into a pandas DataFrame, handle file not found gracefully."""
+    if not file_path or not file_path.exists():
+        logging.warning(f"File {file_path} does not exist. Skipping.")
+        return None
+    logging.info(f"Loaded {file_path}")
+    df = pd.read_csv(file_path)
+    df.columns = df.columns.str.lower()
+    return df
+
+# Function to flatten the type_fields column
+def flatten_type_fields(df, column_name='type_fields'):
+    def flatten_row(row):
+        try:
+            type_fields_dict = ast.literal_eval(row[column_name])
+            return pd.Series(type_fields_dict)
+        except (ValueError, SyntaxError):
+            return pd.Series()
+
+    logging.info(f"Flattening column '{column_name}'")
+    flattened_type_fields = df.apply(flatten_row, axis=1)
+    return pd.concat([df.drop(columns=[column_name]), flattened_type_fields], axis=1)
+
+# Function to clean column names
+def clean_column_names(df):
+    def clean_column(col_name):
+        return re.sub(r'_\d+$', '', col_name)
+
+    logging.info("Cleaning column names.")
+    df.columns = [clean_column(col) for col in df.columns]
+    return df
+
+# Individual mapping functions with pre-merge renaming
+def map_departments(assets_df, departments_df):
+    if departments_df is not None and 'department_id' in assets_df.columns:
+        logging.info("Mapping departments...")
+        departments_df = departments_df.rename(columns={'id': 'department_id', 'name': 'department_name'})
+        return assets_df.merge(departments_df[['department_id', 'department_name']], how='left', on='department_id')
+    logging.warning("Missing department mapping.")
+    return assets_df
+
+def map_vendors(assets_df, vendors_df):
+    if vendors_df is not None and 'vendor' in assets_df.columns:
+        logging.info("Mapping vendors...")
+        vendors_df = vendors_df.rename(columns={'id': 'vendor_id', 'name': 'vendor_name'})
+        return assets_df.merge(vendors_df[['vendor_id', 'vendor_name']], how='left', left_on='vendor', right_on='vendor_id')
+    logging.warning("Missing vendor mapping.")
+    return assets_df
+
+def map_requesters(assets_df, requesters_df):
+    if requesters_df is not None and 'user_id' in assets_df.columns:
+        logging.info("Mapping requesters...")
+        if 'name' in requesters_df.columns:
+            name_column = 'name'
+        elif 'first_name' in requesters_df.columns and 'last_name' in requesters_df.columns:
+            requesters_df['name'] = requesters_df['first_name'] + ' ' + requesters_df['last_name']
+            name_column = 'name'
+        else:
+            logging.warning("Missing name columns in requesters data.")
+            return assets_df
+        requesters_df = requesters_df.rename(columns={'id': 'user_id', name_column: 'requester_name'})
+        return assets_df.merge(requesters_df[['user_id', 'requester_name']], how='left', on='user_id')
+    logging.warning("Missing requester mapping.")
+    return assets_df
+
+def map_asset_types(assets_df, asset_types_df):
+    if asset_types_df is not None and 'asset_type_id' in assets_df.columns:
+        logging.info("Mapping asset types...")
+        asset_types_df = asset_types_df.rename(columns={'id': 'asset_type_id', 'name': 'asset_type_name'})
+        return assets_df.merge(asset_types_df[['asset_type_id', 'asset_type_name']], how='left', on='asset_type_id')
+    logging.warning("Missing asset type mapping.")
+    return assets_df
+
+def map_filewave(assets_df, filewave_df):
+    if filewave_df is not None and 'name' in filewave_df.columns:
+        logging.info("Mapping filewave data...")
+        assets_df['temp_match'] = assets_df['hostname'].fillna(assets_df['name'])
+        filewave_df = filewave_df.rename(columns={'name': 'filewave_name'})
+        merged_df = assets_df.merge(filewave_df[['filewave_name', 'platform', 'version', 'last_logged_username', 'last_connect']],
+                                    how='left', left_on='temp_match', right_on='filewave_name')
+        return merged_df.drop(columns=['temp_match'])
+    logging.warning("Missing filewave mapping.")
+    return assets_df
+
+def map_products(assets_df, products_df):
+    if products_df is not None and 'product' in assets_df.columns:
+        logging.info("Mapping product data...")
+        products_df = products_df.rename(columns={
+            'id': 'product_id',
+            'name': 'product_name',
+            'manufacturer': 'manufacturer_name',
+            'description': 'product_description',
+            'description_text': 'product_description2'
+        })
+        return assets_df.merge(products_df[['product_id', 'product_name', 'manufacturer_name', 'product_description', 'product_description2']],
+                               how='left', left_on='product', right_on='product_id')
+    logging.warning("Missing product mapping.")
+    return assets_df
+
+# Function to clean unnecessary '.0' from float columns and save the DataFrame to a CSV file
+def save_csv(df, output_file_path):
+    # Iterate through each column and check if it's a float type
+    for column in df.columns:
+        if pd.api.types.is_float_dtype(df[column]):
+            # If the column has float type but all values are whole numbers, convert to integers
+            if (df[column] % 1 == 0).all():
+                df[column] = df[column].astype('Int64')  # Use Int64 to handle NaN values properly
+            else:
+                df[column] = df[column].apply(lambda x: f"{x:.0f}" if pd.notnull(x) else "")
+    df.to_csv(output_file_path, index=False)
+    logging.info(f'Cleaned and flattened CSV saved to {output_file_path}')
+
+# Main function to process the CSV file
+def process_csv(input_file_path, output_file_path, departments_file_path=None, vendors_file_path=None,
+                requesters_file_path=None, asset_types_file_path=None, filewave_file_path=None,
+                products_file_path=None, column_name='type_fields'):
+    df = load_csv(input_file_path)
+    if df is None:
+        return
+
+    df_flattened = flatten_type_fields(df, column_name)
+    df_cleaned = clean_column_names(df_flattened)
+
+    departments_df = load_csv(departments_file_path) if departments_file_path else None
+    vendors_df = load_csv(vendors_file_path) if vendors_file_path else None
+    requesters_df = load_csv(requesters_file_path) if requesters_file_path else None
+    asset_types_df = load_csv(asset_types_file_path) if asset_types_file_path else None
+    filewave_df = load_csv(filewave_file_path) if filewave_file_path else None
+    products_df = load_csv(products_file_path) if products_file_path else None
+
+    df_mapped = map_departments(df_cleaned, departments_df)
+    df_mapped = map_vendors(df_mapped, vendors_df)
+    df_mapped = map_requesters(df_mapped, requesters_df)
+    df_mapped = map_asset_types(df_mapped, asset_types_df)
+    df_mapped = map_filewave(df_mapped, filewave_df)
+    df_mapped = map_products(df_mapped, products_df)
+
+    save_csv(df_mapped, output_file_path)
+
+if __name__ == "__main__":
+    base_dir = Path(__file__).resolve().parent.parent
+    data_dir = base_dir / "data"
+
+    input_file_path = data_dir / "assets_data.csv"
+    output_file_path = data_dir / "assets_data_flattened_cleaned_mapped.csv"
+    departments_file_path = data_dir / "departments_data.csv"
+    vendors_file_path = data_dir / "vendors_data.csv"
+    requesters_file_path = data_dir / "requesters_data.csv"
+    asset_types_file_path = data_dir / "asset_types_data.csv"
+    filewave_file_path = data_dir / "filewave_data.csv"
+    products_file_path = data_dir / "products_data.csv"
+
+    process_csv(
+        input_file_path,
+        output_file_path,
+        departments_file_path,
+        vendors_file_path,
+        requesters_file_path,
+        asset_types_file_path,
+        filewave_file_path,
+        products_file_path
+    )
+
+
+# Contents of data_processing_headcount.py
+# src/data_processing_headcount.py
+
+import pandas as pd
+from pathlib import Path
+import logging
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def load_csv(filepath):
+    """Loads a CSV file into a pandas DataFrame."""
+    file_path = Path(filepath)
+    if file_path.exists() and file_path.suffix == '.csv':
+        logging.info(f"Loading data from {file_path}...")
+        return pd.read_csv(file_path)
+    else:
+        logging.error(f"The file {file_path} does not exist or is not a CSV file.")
+        raise FileNotFoundError(f"The file {file_path} does not exist or is not a CSV file.")
+
+def filter_employees(df):
+    """
+    Filters the DataFrame to include relevant columns and only active employees.
+    Also, removes rows with empty first_name and last_name columns.
+    """
+    logging.info("Filtering employees and selecting required columns...")
+
+    # Select relevant columns
+    employee_df = df[['first_name', 'last_name', 'masterworks_email', 'status', 'employee_type', 'title',
+                      'position_start_date', 'department', 'termination_date']].copy()
+
+    # Remove rows where both 'first_name' and 'last_name' are empty
+    employee_df = employee_df.dropna(subset=['first_name', 'last_name'], how='all')
+
+    # Filter only active employees
+    employee_df = employee_df[employee_df['status'] == 'Active']
+
+    return employee_df
+
+def clean_names(df):
+    """Strips any leading/trailing whitespace from 'first_name', 'last_name', and 'masterworks_email'."""
+    logging.info("Stripping whitespace from 'first_name', 'last_name', and 'masterworks_email' columns...")
+
+    if 'masterworks_email' not in df.columns:
+        logging.error("'masterworks_email' column not found in the DataFrame.")
+        raise KeyError("'masterworks_email' column not found in the DataFrame.")
+
+    # Convert the columns to string and handle NaN values before stripping whitespace
+    df['first_name'] = df['first_name'].fillna('').astype(str).str.strip()
+    df['last_name'] = df['last_name'].fillna('').astype(str).str.strip()
+    df['masterworks_email'] = df['masterworks_email'].fillna('').astype(str).apply(lambda x: str(x).strip() if isinstance(x, str) else x)
+
+    return df
+
+def add_full_name(df):
+    """Adds a 'full_name' column by combining 'first_name' and 'last_name'."""
+    logging.info("Adding 'Full Name' column...")
+    df['full_name'] = df['first_name'] + ' ' + df['last_name']
+    return df
+
+def sort_by_last_name(df):
+    """Sorts the DataFrame by 'last_name'."""
+    logging.info("Sorting by 'last_name'...")
+    return df.sort_values(by='last_name')
+
+def add_employee_id(df):
+    """Adds an 'employee_id' column with values from 1 to n."""
+    logging.info("Adding 'employee_id' column...")
+    df.insert(0, 'employee_id', range(1, len(df) + 1))
+    return df
+
+def save_to_csv(df, output_filepath):
+    """Saves the DataFrame to a CSV file."""
+    output_path = Path(output_filepath)
+    logging.info(f"Saving the modified data to {output_path}...")
+    df.to_csv(output_path, index=False)
+    logging.info(f"Data saved successfully to {output_path}")
+
+def process_headcount_data(input_filepath, output_filepath):
+    """Main function to load, filter, process, and save headcount data."""
+    # Load the CSV file
+    headcount_df = load_csv(input_filepath)
+
+    # Filter employees and select required columns
+    employees_df = filter_employees(headcount_df)
+
+    # Clean names by stripping whitespace
+    employees_df = clean_names(employees_df)
+
+    # Add 'Full Name' column
+    employees_df = add_full_name(employees_df)
+
+    # Sort the DataFrame by 'last_name'
+    employees_df = sort_by_last_name(employees_df)
+
+    # Add 'employee_id' column
+    employees_df = add_employee_id(employees_df)
+
+    # Save the result to a new CSV file
+    save_to_csv(employees_df, output_filepath)
+
+def main(data_dir=None):
+    """
+    Main function to process headcount data.
+    If data_dir is not provided, it uses a default path.
+    """
+    if data_dir is None:
+        # Use a default path relative to the script location
+        base_dir = Path(__file__).resolve().parent.parent
+        data_dir = base_dir / "data"
+    else:
+        data_dir = Path(data_dir)
+
+    # Ensure the data directory exists
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    input_file = data_dir / "headcount_data.csv"
+    output_file = data_dir / "filtered_active_employees.csv"
+
+    process_headcount_data(input_file, output_file)
+
+if __name__ == "__main__":
+    main()  # This will use the default data directory when run standalone
+
+
+# Contents of data_standardization.py
+# src/data_standardization.py
+
+import os
+import pandas as pd
+import ast
+from openai import OpenAI
+from dotenv import load_dotenv
+from pathlib import Path
+from collections import Counter
+import re
+import numpy as np
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def enforce_data_types(df):
+    """
+    Ensure that ID columns, asset tags, and other relevant fields are integers (or strings if needed),
+    while preserving empty values as NaN (and not filling them with 0).
+    """
+    int_columns = ['purchase_id', 'asset_type_id', 'asset_id', 'vendor_id', 'product_id', 'display_id', 'count']
+    str_columns = ['asset_tag', 'serial_number', 'uuid', 'vendor_name', 'product_name']
+
+    for col in int_columns:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce').astype('Int64')
+
+    for col in str_columns:
+        if col in df.columns:
+            df[col] = df[col].astype(str)
+
+    return df
+
+def load_env_variables():
+    """Load environment variables from the .env file."""
+    load_dotenv()
+    openai_api_key = os.getenv('OPENAI_API_KEY')
+    if not openai_api_key:
+        raise ValueError("OPENAI_API_KEY is not set. Please check your .env file.")
+    return openai_api_key
+
+def load_data(file_path, column):
+    """Load the dataset and focus on the specified column."""
+    df = pd.read_csv(file_path)
+    column_counts = df[column].value_counts().to_dict()
+    return df, column_counts
+
+def combine_counts(*counts_dicts):
+    """Combine counts from multiple dictionaries."""
+    combined_counts = Counter()
+    for counts in counts_dicts:
+        combined_counts.update(counts)
+    return dict(combined_counts)
+
+def extract_dict_from_text(text):
+    """Extract and return only the dictionary part from a string containing extra text."""
+    match = re.search(r'\{.*\}', text, re.DOTALL)
+    if match:
+        return match.group(0)
+    else:
+        raise ValueError("No valid dictionary found in the text.")
+
+def consolidate_duplicate_columns(df, base_column, method='sum'):
+    """
+    Consolidate duplicate columns (e.g., 'memory', 'os_version') into a single column.
+    Supported methods: 'sum', 'max', 'first_non_null'.
+    """
+    pattern = rf'^{re.escape(base_column)}(?:\.\d+)?$'
+    duplicate_columns = [col for col in df.columns if re.match(pattern, col)]
+
+    logging.info(f"Found duplicate columns for '{base_column}': {duplicate_columns}")
+
+    if len(duplicate_columns) <= 1:
+        return df
+
+    logging.info(f"Consolidating columns {duplicate_columns} into '{base_column}' using method '{method}'.")
+
+    if method == 'sum':
+        df[base_column] = df[duplicate_columns].sum(axis=1, skipna=True, min_count=1)
+    elif method == 'max':
+        if pd.api.types.is_numeric_dtype(df[duplicate_columns].dtypes.iloc[0]):
+            df[base_column] = df[duplicate_columns].max(axis=1)
+        else:
+            # For non-numeric data, use the first non-null value
+            df[base_column] = df[duplicate_columns].apply(lambda row: next((val for val in row if pd.notna(val)), None), axis=1)
+    elif method == 'first_non_null':
+        df[base_column] = df[duplicate_columns].apply(lambda row: next((val for val in row if pd.notna(val)), None), axis=1)
+    else:
+        raise ValueError(f"Unsupported consolidation method: {method}")
+
+    df.drop(columns=[col for col in duplicate_columns if col != base_column], inplace=True)
+    return df
+
+def send_to_gpt_for_analysis(client, counts, column_name):
+    """Send the combined counts to GPT for standardization."""
+    system_prompt = f"""
+    You are a helpful assistant who standardizes text data.
+    Below is a list of {column_name} from multiple datasets along with their counts.
+    Please analyze this and provide a dictionary to map these values to standardized names. When you provide your answer, only provide the dictionary.
+    """
+
+    cleaned_content = f"{counts}"
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": cleaned_content}
+            ],
+            temperature=0,
+            max_tokens=2000
+        )
+
+        response_text = extract_dict_from_text(response.choices[0].message.content.strip())
+        return response_text
+
+    except Exception as e:
+        logging.error(f"Error during GPT request: {e}")
+        return None
+
+def save_to_txt(content, output_file):
+    """Save the GPT response to a txt file."""
+    with open(output_file, 'w') as f:
+        f.write(content)
+    logging.info(f"Mapping saved to {output_file}")
+
+def load_mapping(file_path):
+    """Load the mapping from a .txt file."""
+    with open(file_path, 'r') as f:
+        mapping_str = f.read().strip()
+        mapping_dict = ast.literal_eval(mapping_str)
+    return mapping_dict
+
+def apply_mapping_to_dataset(df, column, mapping):
+    """Apply the mapping to the dataset."""
+    df[column] = df[column].map(mapping).fillna(df[column])
+    return df
+
+def format_dates(df, date_columns):
+    """Ensure date columns are formatted as YYYY-MM-DD."""
+    for column in date_columns:
+        if column in df.columns:
+            df[column] = pd.to_datetime(df[column], errors='coerce').dt.strftime('%Y-%m-%d')
+    return df
+
+def assign_asset_id(df):
+    """Rename 'id' column to 'asset_id'."""
+    df.rename(columns={'id': 'asset_id'}, inplace=True)
+    return df
+
+def clean_quotes(df, columns):
+    """Remove all double quotes, including escaped ones, and strip surrounding quotes from specified columns in a DataFrame."""
+    for column in columns:
+        if column in df.columns:
+            df[column] = df[column].str.replace(r'\"', '', regex=True)
+            df[column] = df[column].str.replace(r'"', '', regex=True)
+            df[column] = df[column].str.strip()
+    return df
+
+def main():
+    # Load environment variables
+    openai_api_key = load_env_variables()
+
+    # Initialize OpenAI client
+    client = OpenAI(api_key=openai_api_key)
+
+    # Define file paths and columns
+    data_dir = Path('data')
+    netsuite_file_path = data_dir / 'netsuite_data.csv'
+    assets_file_path = data_dir / 'assets_data_flattened_cleaned_mapped.csv'
+
+    combined_vendor_mapping_file_path = data_dir / 'combined_vendor_mapping.txt'
+    combined_asset_class_type_mapping_file_path = data_dir / 'combined_asset_class_type_mapping.txt'
+    combined_item_product_mapping_file_path = data_dir / 'combined_item_product_mapping.txt'
+
+    # Step 1: Load and clean data
+    try:
+        netsuite_df, netsuite_vendor_counts = load_data(netsuite_file_path, 'vendor')
+        assets_df, assets_vendor_counts = load_data(assets_file_path, 'vendor_name')
+        logging.info("Data loaded successfully.")
+    except Exception as e:
+        logging.error(f"Error loading data: {e}")
+        return
+
+    # Consolidate memory, os, and os_version columns
+    for column in ['memory', 'os', 'os_version']:
+        try:
+            assets_df = consolidate_duplicate_columns(assets_df, column, method='max')
+        except Exception as e:
+            logging.error(f"Error consolidating '{column}' columns: {e}")
+            return
+
+    # Process vendor mappings
+    if not combined_vendor_mapping_file_path.exists():
+        logging.info(f"Vendor mapping does not exist, generating it...")
+        combined_vendor_counts = combine_counts(netsuite_vendor_counts, assets_vendor_counts)
+        combined_vendor_mapping = send_to_gpt_for_analysis(client, combined_vendor_counts, 'vendor')
+
+        if combined_vendor_mapping:
+            save_to_txt(combined_vendor_mapping, combined_vendor_mapping_file_path)
+    else:
+        logging.info(f"Using cached vendor mapping from {combined_vendor_mapping_file_path}")
+
+    try:
+        vendor_mapping = load_mapping(combined_vendor_mapping_file_path)
+        netsuite_df = apply_mapping_to_dataset(netsuite_df, 'vendor', vendor_mapping)
+        assets_df = apply_mapping_to_dataset(assets_df, 'vendor_name', vendor_mapping)
+        logging.info("Vendor mapping applied successfully.")
+    except Exception as e:
+        logging.error(f"Error applying vendor mapping: {e}")
+
+    # Step 3: Process asset class and type
+    if not combined_asset_class_type_mapping_file_path.exists():
+        logging.info(f"Asset class/type mapping does not exist, generating it...")
+        try:
+            _, assets_type_counts = load_data(assets_file_path, 'asset_type_name')
+            _, netsuite_asset_class_counts = load_data(netsuite_file_path, 'asset_class')
+        except Exception as e:
+            logging.error(f"Error loading asset class/type data: {e}")
+            return
+
+        combined_asset_class_type_counts = combine_counts(assets_type_counts, netsuite_asset_class_counts)
+        combined_asset_class_type_mapping = send_to_gpt_for_analysis(client, combined_asset_class_type_counts, 'asset_class and asset_type_name')
+
+        if combined_asset_class_type_mapping:
+            save_to_txt(combined_asset_class_type_mapping, combined_asset_class_type_mapping_file_path)
+    else:
+        logging.info(f"Using cached asset class/type mapping from {combined_asset_class_type_mapping_file_path}")
+
+    try:
+        asset_class_type_mapping = load_mapping(combined_asset_class_type_mapping_file_path)
+        netsuite_df = apply_mapping_to_dataset(netsuite_df, 'asset_class', asset_class_type_mapping)
+        assets_df = apply_mapping_to_dataset(assets_df, 'asset_type_name', asset_class_type_mapping)
+        logging.info("Asset class/type mapping applied successfully.")
+    except Exception as e:
+        logging.error(f"Error applying asset class/type mapping: {e}")
+
+    # Step 4: Process items and products
+    if not combined_item_product_mapping_file_path.exists():
+        logging.info(f"Item/Product mapping does not exist, generating it...")
+        try:
+            _, assets_product_counts = load_data(assets_file_path, 'product_name')
+            _, netsuite_item_counts = load_data(netsuite_file_path, 'item')
+        except Exception as e:
+            logging.error(f"Error loading item/product data: {e}")
+            return
+
+        combined_item_product_counts = combine_counts(assets_product_counts, netsuite_item_counts)
+        combined_item_product_mapping = send_to_gpt_for_analysis(client, combined_item_product_counts, 'item and product_name')
+
+        if combined_item_product_mapping:
+            save_to_txt(combined_item_product_mapping, combined_item_product_mapping_file_path)
+    else:
+        logging.info(f"Using cached item/product mapping from {combined_item_product_mapping_file_path}")
+
+    try:
+        item_product_mapping = load_mapping(combined_item_product_mapping_file_path)
+        netsuite_df = apply_mapping_to_dataset(netsuite_df, 'item', item_product_mapping)
+        assets_df = apply_mapping_to_dataset(assets_df, 'product_name', item_product_mapping)
+        logging.info("Item/Product mapping applied successfully.")
+    except Exception as e:
+        logging.error(f"Error applying item/product mapping: {e}")
+
+    # Step 5: Format date columns
+    date_columns = ['created_at', 'updated_at', 'acquisition_date', 'warranty_expiry_date']
+    try:
+        assets_df = format_dates(assets_df, date_columns)
+        logging.info("Date columns formatted successfully.")
+    except Exception as e:
+        logging.error(f"Error formatting date columns: {e}")
+
+    # Step 6: Sort and assign asset_id
+    try:
+        assets_df = assets_df.sort_values(by='created_at')
+        assets_df = assign_asset_id(assets_df)
+        logging.info("Data sorted and 'asset_id' assigned successfully.")
+    except Exception as e:
+        logging.error(f"Error sorting data or assigning 'asset_id': {e}")
+
+    # Step 7: Enforce data types
+    try:
+        netsuite_df = enforce_data_types(netsuite_df)
+        assets_df = enforce_data_types(assets_df)
+        logging.info("Data types enforced successfully.")
+    except Exception as e:
+        logging.error(f"Error enforcing data types: {e}")
+
+    # Step 8: Save cleaned datasets
+    try:
+        cleaned_netsuite_file_path = data_dir / 'netsuite_data_cleaned.csv'
+        cleaned_assets_file_path = data_dir / 'assets_data_cleaned.csv'
+
+        netsuite_df.to_csv(cleaned_netsuite_file_path, index=False)
+        assets_df.to_csv(cleaned_assets_file_path, index=False)
+
+        logging.info(f"Cleaned Netsuite data saved to {cleaned_netsuite_file_path}")
+        logging.info(f"Cleaned Assets data saved to {cleaned_assets_file_path}")
+    except Exception as e:
+        logging.error(f"Error saving cleaned data: {e}")
+
+if __name__ == '__main__':
+    main()
+
+
+# Contents of laptop_matching.py
+# src/laptop_matching.py
+
+import pandas as pd
+from rapidfuzz import fuzz
+from pathlib import Path
+import json
+import logging
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+PURCHASES_FILE = DATA_DIR / "netsuite_data_cleaned.csv"
+ASSETS_FILE = DATA_DIR / "assets_data_cleaned.csv"
+OUTPUT_FILE = DATA_DIR / "assets_data_with_assignments.csv"
+ASSIGNMENTS_FILE = DATA_DIR / "asset_purchase_assignments.json"
+
+def enforce_data_types(df):
+    """
+    Ensure that ID columns, asset tags, and other relevant fields are integers (or strings if needed),
+    while preserving empty values as NaN (and not filling them with 0).
+    """
+    int_columns = ['purchase_id', 'asset_type_id', 'asset_id', 'vendor_id', 'vendor', 'product_id', 'display_id', 'count']
+    str_columns = ['asset_tag', 'serial_number', 'uuid', 'vendor_name', 'product_name']
+
+    for col in int_columns:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce').astype('Int64')
+
+    for col in str_columns:
+        if col in df.columns:
+            df[col] = df[col].astype(str)
+
+    return df
+
+# Load data
+def load_data():
+    purchases_df = pd.read_csv(PURCHASES_FILE)
+    assets_df = pd.read_csv(ASSETS_FILE)
+
+    if 'vendor' not in purchases_df.columns:
+        if 'vendor_name' in purchases_df.columns:
+            purchases_df['vendor'] = purchases_df['vendor_name']
+        else:
+            raise KeyError(f"Column 'vendor' not found in purchases_df. Available columns: {', '.join(purchases_df.columns)}")
+
+    if 'item' not in purchases_df.columns:
+        if 'product_name' in purchases_df.columns:
+            purchases_df['item'] = purchases_df['product_name']
+        else:
+            raise KeyError(f"Column 'item' not found in purchases_df. Available columns: {', '.join(purchases_df.columns)}")
+
+    if 'description' not in purchases_df.columns:
+        raise KeyError(f"Column 'description' not found in purchases_df. Available columns: {', '.join(purchases_df.columns)}")
+
+    purchases_df['vendor_lower'] = purchases_df['vendor'].fillna('').str.lower()
+    purchases_df['item_lower'] = purchases_df['item'].fillna('').str.lower()
+    purchases_df['description_lower'] = purchases_df['description'].fillna('').str.lower()
+    purchases_df['composite_index'] = purchases_df['item_lower'] + ' ' + purchases_df['vendor_lower'] + ' ' + purchases_df['description_lower']
+
+    assets_df['vendor_name_lower'] = assets_df['vendor_name'].fillna('').str.lower()
+    assets_df['product_name_lower'] = assets_df['product_name'].fillna('').str.lower()
+    assets_df['description_lower'] = assets_df['description'].fillna('').str.lower()
+    assets_df['composite_index'] = assets_df['product_name_lower'] + ' ' + assets_df['vendor_name_lower'] + ' ' + assets_df['description_lower']
+
+    if 'count' in purchases_df.columns:
+        purchases_df['remaining_count'] = purchases_df['count']
+    else:
+        raise KeyError(f"Column 'count' not found in purchases_df. Available columns: {', '.join(purchases_df.columns)}")
+
+    return purchases_df, assets_df
+
+# Find exact and fuzzy matches
+def match_asset(asset, purchases_df):
+    valid_purchases = purchases_df[purchases_df['remaining_count'] > 0].copy()
+
+    exact_matches = valid_purchases[
+        (valid_purchases['vendor_lower'] == asset['vendor_name_lower']) &
+        (valid_purchases['item_lower'] == asset['product_name_lower']) &
+        (valid_purchases['remaining_count'] > 0)
+    ]
+
+    if not exact_matches.empty:
+        return exact_matches.iloc[0]
+
+    valid_purchases.loc[:, 'fuzzy_score'] = valid_purchases['composite_index'].apply(
+        lambda x: fuzz.ratio(x, asset['composite_index'])
+    )
+    fuzzy_matches = valid_purchases[valid_purchases['fuzzy_score'] > 50].sort_values(by='fuzzy_score', ascending=False)
+
+    if not fuzzy_matches.empty:
+        return fuzzy_matches.iloc[0]
+
+    return None
+
+# Automatic matching function with summary and JSON generation
+def auto_match_assets(purchases_df, assets_df):
+    total_assets = len(assets_df)
+    total_purchase_items = int(purchases_df['count'].sum()) if 'count' in purchases_df.columns else len(purchases_df)
+
+    matched_count = 0
+    exact_matches_count = 0
+    fuzzy_matches_count = 0
+
+    asset_purchase_assignments = {}
+
+    for i, asset in assets_df.iterrows():
+        match = match_asset(asset, purchases_df)
+
+        if match is not None:
+            assets_df.at[i, 'purchase_assignment'] = match['purchase_id']
+            matched_count += 1
+
+            if match.get('fuzzy_score', None) is not None:
+                fuzzy_matches_count += 1
+            else:
+                exact_matches_count += 1
+
+            purchases_df.loc[purchases_df['purchase_id'] == match['purchase_id'], 'remaining_count'] -= 1
+
+            asset_purchase_assignments[asset['asset_id']] = int(match['purchase_id'])
+        else:
+            assets_df.at[i, 'purchase_assignment'] = None
+
+    logging.info(f"Total assets to match: {total_assets}")
+    logging.info(f"Total purchase items to match against (based on count): {total_purchase_items}")
+    logging.info(f"Total matched assets: {matched_count}")
+    logging.info(f"Exact matches: {exact_matches_count}")
+    logging.info(f"Fuzzy matches: {fuzzy_matches_count}")
+    logging.info(f"Unmatched assets: {total_assets - matched_count}")
+
+    return assets_df, asset_purchase_assignments
+
+# Save asset-purchase assignments to JSON
+def save_assignments_to_json(assignments, output_file):
+    with open(output_file, 'w') as json_file:
+        json.dump(assignments, json_file, indent=4)
+    logging.info(f"Asset-purchase assignments saved to {output_file}")
+
+# Main function to load data, match assets, and save output
+def main():
+    purchases_df, assets_df = load_data()
+
+    logging.info("Starting automatic matching...")
+
+    assets_df, asset_purchase_assignments = auto_match_assets(purchases_df, assets_df)
+
+    assets_df = enforce_data_types(assets_df)
+    assets_df['purchase_assignment'] = assets_df['purchase_assignment'].astype('Int64')
+
+    # Save the matched data to CSV
+    assets_df.to_csv(OUTPUT_FILE, index=False)
+    logging.info(f"Automatic matching completed. Results saved to {OUTPUT_FILE}")
+
+    # Save asset-purchase assignments to JSON
+    save_assignments_to_json(asset_purchase_assignments, ASSIGNMENTS_FILE)
+
+if __name__ == "__main__":
+    main()
+
+
+# Contents of matching_streamlit_app.py
+# src/matching_streamlit_app.py
+
+import streamlit as st
+import pandas as pd
+from pathlib import Path
+from rapidfuzz import fuzz
+import json
+from dotenv import load_dotenv
+import logging
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Load environment variables
+load_dotenv()
+
+# Paths to data files
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+PURCHASES_FILE = DATA_DIR / "netsuite_data_cleaned.csv"
+ASSETS_FILE = DATA_DIR / "assets_data_cleaned.csv"
+ASSIGNMENTS_FILE = DATA_DIR / "asset_purchase_assignments.json"
+UPDATED_ASSETS_FILE = DATA_DIR / "assets_data_with_assignments.csv"  # New file to save updated assets data
+FLAG_FILE = DATA_DIR / "streamlit_done.flag"  # Flag file to indicate when Streamlit is done
+
+# Load data
+@st.cache_data
+def load_data():
+    try:
+        logging.info(f"Loading data from {PURCHASES_FILE} and {ASSETS_FILE}")
+        purchases = pd.read_csv(PURCHASES_FILE)
+        assets = pd.read_csv(ASSETS_FILE)
+
+        # Strip whitespace from column names
+        purchases.columns = purchases.columns.str.strip()
+        assets.columns = assets.columns.str.strip()
+
+        # Ensure 'count' is numeric and handle missing values
+        purchases['count'] = pd.to_numeric(purchases['count'], errors='coerce').fillna(0).astype(int)
+
+        # Parse dates after stripping column names
+        purchases['date'] = pd.to_datetime(purchases['date'], errors='coerce')
+        assets['created_at'] = pd.to_datetime(assets['created_at'], errors='coerce')
+
+        # Preprocess data
+        purchases['vendor_lower'] = purchases['vendor'].fillna('').str.lower()
+        purchases['item_lower'] = purchases['item'].fillna('').str.lower()
+        purchases['description_lower'] = purchases['description'].fillna('').str.lower()
+        purchases['composite_index'] = purchases['item_lower'] + ' ' + purchases['vendor_lower'] + ' ' + purchases['description_lower']
+
+        assets['vendor_name_lower'] = assets['vendor_name'].fillna('').str.lower()
+        assets['product_name_lower'] = assets['product_name'].fillna('').str.lower()
+        assets['description_lower'] = assets['description'].fillna('').str.lower()
+        assets['composite_index'] = assets['product_name_lower'] + ' ' + assets['vendor_name_lower'] + ' ' + assets['description_lower']
+
+        # Filter to only Laptops (case-insensitive)
+        purchases_laptops = purchases[purchases['asset_class'].str.lower() == 'laptop']
+        assets_laptops = assets[assets['asset_type_name'].str.lower() == 'laptop']
+
+        logging.info("Data loaded and processed successfully.")
+        return purchases_laptops.reset_index(drop=True), assets_laptops.reset_index(drop=True)
+    except Exception as e:
+        logging.error(f"Error loading data: {e}")
+        raise
+
+# Initialize session state
+if 'purchases_df' not in st.session_state:
+    st.session_state.purchases_df, st.session_state.assets_df = load_data()
+    st.session_state.assignments = {}
+    st.session_state.asset_order = []
+    st.session_state.current_asset_index = 0
+
+# Function to save assignments
+def save_assignments():
+    try:
+        with open(ASSIGNMENTS_FILE, 'w') as f:
+            json.dump(st.session_state.assignments, f, default=str)
+        st.sidebar.success("Assignments saved successfully!")
+        logging.info(f"Assignments saved to {ASSIGNMENTS_FILE}")
+    except Exception as e:
+        logging.error(f"Error saving assignments: {e}")
+
+# Function to load assignments and apply them to the assets data
+def load_assignments():
+    try:
+        if ASSIGNMENTS_FILE.exists():
+            with open(ASSIGNMENTS_FILE, 'r') as f:
+                st.session_state.assignments = json.load(f)
+            logging.info(f"Assignments loaded from {ASSIGNMENTS_FILE}")
+        else:
+            st.session_state.assignments = {}
+            logging.info("No previous assignments found.")
+
+        # Initialize remaining counts
+        st.session_state.purchases_df['remaining_count'] = st.session_state.purchases_df['count']
+
+        # Reset any existing assignments in the assets DataFrame
+        st.session_state.assets_df['purchase_assignment'] = None
+
+        # Apply the assignments to the assets DataFrame and update remaining counts
+        for asset_id_str, purchase_id in st.session_state.assignments.items():
+            asset_id = int(asset_id_str)
+            st.session_state.assets_df.loc[
+                st.session_state.assets_df['asset_id'] == asset_id, 'purchase_assignment'
+            ] = purchase_id
+
+            # Decrease remaining count for the assigned purchase
+            st.session_state.purchases_df.loc[
+                st.session_state.purchases_df['purchase_id'] == purchase_id, 'remaining_count'
+            ] -= 1
+
+        logging.info("Assignments applied to assets data.")
+    except Exception as e:
+        logging.error(f"Error loading and applying assignments: {e}")
+        raise
+
+load_assignments()
+
+# Ensure 'date' column is datetime in purchases_df
+st.session_state.purchases_df['date'] = pd.to_datetime(st.session_state.purchases_df['date'], errors='coerce')
+
+# Function to update sidebar information
+def update_sidebar_info():
+    st.sidebar.subheader("Assignment Summary")
+    st.sidebar.write(f"Total Assets: {len(st.session_state.assets_df)}")
+    st.sidebar.write(f"Assigned: {len(st.session_state.assignments)}")
+    st.sidebar.write(f"Remaining: {len(st.session_state.assets_df) - len(st.session_state.assignments)}")
+
+    if st.sidebar.checkbox("Show All Assignments"):
+        assignments_list = []
+        for asset_id, purchase_id in st.session_state.assignments.items():
+            asset_df = st.session_state.assets_df[st.session_state.assets_df['asset_id'] == int(asset_id)]
+            purchase_df = st.session_state.purchases_df[st.session_state.purchases_df['purchase_id'] == int(purchase_id)]
+
+            if not asset_df.empty and not purchase_df.empty:
+                asset = asset_df.iloc[0]
+                purchase = purchase_df.iloc[0]
+                assignments_list.append({
+                    "Asset ID": str(asset_id),
+                    "Asset Name": str(asset['name']),
+                    "Purchase ID": str(purchase_id),
+                    "Purchase Date": purchase['date'].strftime('%Y-%m-%d') if pd.notnull(purchase['date']) else '',
+                    "Vendor": str(purchase['vendor']),
+                    "Item": str(purchase['item']),
+                    "Remaining Count": str(purchase['remaining_count'])
+                })
+            else:
+                st.sidebar.warning(f"Missing data for Asset ID {asset_id} or Purchase ID {purchase_id}")
+
+        if assignments_list:
+            assignments_df = pd.DataFrame(assignments_list)
+            assignments_df = assignments_df.astype(str)
+            st.sidebar.dataframe(assignments_df)
+        else:
+            st.sidebar.write("No valid assignments to display.")
+
+update_sidebar_info()
+
+# Helper functions
+def get_matching_purchases(asset, purchases):
+    # Ensure 'date' column is datetime
+    purchases['date'] = pd.to_datetime(purchases['date'], errors='coerce')
+
+    # Exact matches
+    exact_matches = purchases[
+        (purchases['vendor_lower'] == asset['vendor_name_lower']) &
+        (purchases['item_lower'] == asset['product_name_lower']) &
+        (purchases['date'] <= asset['created_at']) &
+        (purchases['remaining_count'] > 0)
+    ].copy()
+    exact_matches['date_discrepancy'] = (asset['created_at'] - exact_matches['date']).dt.days
+    exact_matches = exact_matches.sort_values('date_discrepancy')
+
+    # Remaining purchases
+    remaining_purchases = purchases[~purchases.index.isin(exact_matches.index)].copy()
+
+    # Fuzzy matching on remaining purchases
+    asset_composite = asset['composite_index']
+    remaining_purchases['fuzzy_score'] = remaining_purchases['composite_index'].apply(
+        lambda x: round(fuzz.ratio(x, asset_composite), 2)  # Round to 2 decimal places
+    )
+
+    remaining_purchases['date_discrepancy'] = (asset['created_at'] - remaining_purchases['date']).dt.days
+    fuzzy_matches = remaining_purchases[
+        (remaining_purchases['fuzzy_score'] > 45) &
+        (remaining_purchases['date_discrepancy'] >= 0) &
+        (remaining_purchases['remaining_count'] > 0)
+    ].sort_values(['fuzzy_score', 'date_discrepancy'], ascending=[False, True])
+
+    return exact_matches, fuzzy_matches
+
+def display_asset(asset):
+    st.header(f"Asset ID: {asset['asset_id']}")
+    st.write(f"**Name:** {asset['name']}")
+    st.write(f"**Asset Type:** {asset['asset_type_name']}")
+    st.write(f"**Vendor:** {asset['vendor_name']}")
+    st.write(f"**Product Name:** {asset['product_name']}")
+    st.write(f"**Created At:** {asset['created_at'].strftime('%Y-%m-%d')}")
+    st.write(f"**Cost:** ${asset['cost']}")
+    st.write(f"**Description:** {asset['description']}")
+    st.write(f"**Asset State:** {asset['asset_state']}")
+    st.write(f"**Requester Name:** {asset['requester_name']}")
+    st.write(f"**Last Logged Username:** {asset['last_logged_username']}")
+    st.write(f"**Purchase Assignment:** {asset['purchase_assignment']}")
+
+def display_potential_purchases(exact_matches, fuzzy_matches):
+    st.subheader("Exact Matches")
+    if not exact_matches.empty:
+        exact_matches_display = exact_matches.copy()
+        exact_matches_display['date'] = pd.to_datetime(exact_matches_display['date'], errors='coerce').dt.strftime('%Y-%m-%d')
+        exact_matches_display = exact_matches_display[['purchase_id', 'date', 'vendor', 'item', 'cost', 'remaining_count', 'date_discrepancy']]
+        exact_matches_display = exact_matches_display.astype(str)
+        st.dataframe(exact_matches_display, height=200)
+    else:
+        st.write("No exact matches found.")
+
+    st.subheader("Fuzzy Matches")
+    if not fuzzy_matches.empty:
+        fuzzy_matches_display = fuzzy_matches.copy()
+        fuzzy_matches_display['date'] = pd.to_datetime(fuzzy_matches_display['date'], errors='coerce').dt.strftime('%Y-%m-%d')
+        fuzzy_matches_display = fuzzy_matches_display[['purchase_id', 'date', 'vendor', 'item', 'cost', 'remaining_count', 'fuzzy_score', 'date_discrepancy']]
+        fuzzy_matches_display = fuzzy_matches_display.astype(str)
+        st.dataframe(fuzzy_matches_display, height=200)
+    else:
+        st.write("No fuzzy matches found.")
+
+    potential_purchases = pd.concat([exact_matches, fuzzy_matches])
+    return potential_purchases
+
+# Function to assign a purchase to an asset
+def assign_purchase(asset, purchase):
+    asset_id = asset['asset_id']
+    purchase_id = purchase['purchase_id']
+
+    try:
+        remaining_count = st.session_state.purchases_df.loc[
+            st.session_state.purchases_df['purchase_id'] == purchase_id, 'remaining_count'
+        ].values[0]
+
+        if str(asset_id) in st.session_state.assignments:
+            prev_purchase_id = st.session_state.assignments[str(asset_id)]
+            if prev_purchase_id == purchase_id:
+                st.info(f"Asset ID {asset_id} is already assigned to Purchase ID {purchase_id}.")
+                logging.info(f"Asset ID {asset_id} already assigned to Purchase ID {purchase_id}.")
+                return
+            else:
+                # Reassigning to a different purchase
+                st.session_state.purchases_df.loc[
+                    st.session_state.purchases_df['purchase_id'] == prev_purchase_id, 'remaining_count'
+                ] += 1
+
+        if remaining_count < 1:
+            st.error("Selected purchase has no remaining count.")
+            logging.error(f"Selected purchase ID {purchase_id} has no remaining count.")
+            return
+
+        st.session_state.purchases_df.loc[
+            st.session_state.purchases_df['purchase_id'] == purchase_id, 'remaining_count'
+        ] -= 1
+
+        # Update assignment
+        st.session_state.assignments[str(asset_id)] = purchase_id
+        st.session_state.assets_df.loc[
+            st.session_state.assets_df['asset_id'] == asset_id, 'purchase_assignment'
+        ] = purchase_id
+
+        st.success(f"Assigned Asset ID {asset_id} to Purchase ID {purchase_id}.")
+        logging.info(f"Assigned Asset ID {asset_id} to Purchase ID {purchase_id}.")
+        save_assignments()
+        st.rerun()
+    except Exception as e:
+        logging.error(f"Error assigning purchase: {e}")
+        st.error("Failed to assign purchase. Check the logs for more details.")
+
+# Function to unassign a purchase from an asset
+def unassign_purchase(asset):
+    asset_id = asset['asset_id']
+    try:
+        if str(asset_id) in st.session_state.assignments:
+            purchase_id = int(st.session_state.assignments[str(asset_id)])
+            st.session_state.purchases_df.loc[
+                st.session_state.purchases_df['purchase_id'] == purchase_id, 'remaining_count'
+            ] += 1
+            del st.session_state.assignments[str(asset_id)]
+            st.session_state.assets_df.loc[
+                st.session_state.assets_df['asset_id'] == asset_id, 'purchase_assignment'
+            ] = None
+            st.success(f"Unassigned Purchase ID {purchase_id} from Asset ID {asset_id}.")
+            logging.info(f"Unassigned Purchase ID {purchase_id} from Asset ID {asset_id}.")
+            save_assignments()
+            st.rerun()
+        else:
+            st.warning("No purchase is assigned to this asset.")
+    except Exception as e:
+        logging.error(f"Error unassigning purchase: {e}")
+        st.error("Failed to unassign purchase. Check the logs for more details.")
+
+# Prioritize assets with non-empty exact matches
+if not st.session_state.asset_order:
+    assets_with_matches = []
+    assets_without_matches = []
+    for _, asset_row in st.session_state.assets_df.iterrows():
+        exact_matches, _ = get_matching_purchases(asset_row, st.session_state.purchases_df)
+        if not exact_matches.empty:
+            assets_with_matches.append(asset_row['asset_id'])
+        else:
+            assets_without_matches.append(asset_row['asset_id'])
+    st.session_state.asset_order = assets_with_matches + assets_without_matches
+
+# Main Interface
+st.title("Asset to Purchase Assignment")
+
+if st.session_state.current_asset_index < len(st.session_state.asset_order):
+    asset_id = st.session_state.asset_order[st.session_state.current_asset_index]
+    asset = st.session_state.assets_df[st.session_state.assets_df['asset_id'] == asset_id].iloc[0].to_dict()
+    display_asset(asset)
+
+    if str(asset_id) in st.session_state.assignments:
+        assigned_purchase_id = int(st.session_state.assignments[str(asset_id)])
+        assigned_purchase = st.session_state.purchases_df[
+            st.session_state.purchases_df['purchase_id'] == assigned_purchase_id
+        ].iloc[0]
+
+        st.write("### This asset is already assigned to the following purchase:")
+        assigned_purchase_display = assigned_purchase[['purchase_id', 'date', 'vendor', 'item', 'cost', 'remaining_count']].to_frame().T.copy()
+        assigned_purchase_display['date'] = pd.to_datetime(assigned_purchase_display['date'], errors='coerce')
+        assigned_purchase_display['date'] = assigned_purchase_display['date'].dt.strftime('%Y-%m-%d')
+        assigned_purchase_display = assigned_purchase_display.astype(str)
+        st.write(assigned_purchase_display)
+
+        button_container = st.container()
+        with button_container:
+            col1, col2, col3 = st.columns([1, 1, 1])
+            with col1:
+                if st.session_state.current_asset_index > 0:
+                    if st.button("Previous Asset", key="previous_asset"):
+                        st.session_state.current_asset_index -= 1
+                        st.rerun()
+            with col2:
+                if st.button("Unassign Purchase", key="unassign_purchase"):
+                    unassign_purchase(asset)
+            with col3:
+                if st.session_state.current_asset_index < len(st.session_state.asset_order) - 1:
+                    if st.button("Next Asset", key="next_asset"):
+                        st.session_state.current_asset_index += 1
+                        st.rerun()
+    else:
+        exact_matches, fuzzy_matches = get_matching_purchases(asset, st.session_state.purchases_df)
+        potential_purchases = display_potential_purchases(exact_matches, fuzzy_matches)
+
+        if not potential_purchases.empty:
+            selected_purchase_id = st.selectbox(
+                "Select a Purchase to Assign",
+                options=potential_purchases['purchase_id'].astype(int),
+                format_func=lambda x: f"Purchase ID {x}"
+            )
+
+            button_container = st.container()
+            with button_container:
+                col1, col2, col3 = st.columns([1, 1, 1])
+                with col1:
+                    if st.session_state.current_asset_index > 0:
+                        if st.button("Previous Asset", key="previous_asset"):
+                            st.session_state.current_asset_index -= 1
+                            st.rerun()
+                with col2:
+                    if st.button("Assign Purchase", key="assign_purchase"):
+                        selected_purchase = st.session_state.purchases_df[
+                            st.session_state.purchases_df['purchase_id'] == selected_purchase_id
+                        ].iloc[0].to_dict()
+                        assign_purchase(asset, selected_purchase)
+                with col3:
+                    if st.session_state.current_asset_index < len(st.session_state.asset_order) - 1:
+                        if st.button("Next Asset", key="next_asset"):
+                            st.session_state.current_asset_index += 1
+                            st.rerun()
+        else:
+            st.write("No purchases available to assign for this asset.")
+
+            button_container = st.container()
+            with button_container:
+                col1, col2, col3 = st.columns([1, 1, 1])
+                with col1:
+                    if st.session_state.current_asset_index > 0:
+                        if st.button("Previous Asset", key="previous_asset"):
+                            st.session_state.current_asset_index -= 1
+                            st.rerun()
+                with col2:
+                    st.write("")
+                with col3:
+                    if st.button("Next Asset", key="next_asset"):
+                        st.session_state.current_asset_index += 1
+                        st.rerun()
+else:
+    st.write("All assets have been processed.")
+    st.write("Assignments have been saved automatically.")
+
+st.write("Navigate between assets using the buttons above or the sidebar.")
+
+if st.button("Save Updated Assets Data"):
+    try:
+        st.session_state.assets_df.to_csv(UPDATED_ASSETS_FILE, index=False)
+        st.success(f"Updated assets with assignments saved to {UPDATED_ASSETS_FILE}")
+        logging.info(f"Updated assets data saved to {UPDATED_ASSETS_FILE}")
+    except Exception as e:
+        logging.error(f"Error saving updated assets data: {e}")
+        st.error("Failed to save updated assets data. Check the logs for more details.")
+
+if st.button("Finish"):
+    try:
+        with open(FLAG_FILE, 'w') as flag_file:
+            flag_file.write("done")
+        st.success("Process completed. You can now exit Streamlit and resume the pipeline.")
+        logging.info(f"Streamlit session marked as completed with flag file {FLAG_FILE}")
+    except Exception as e:
+        logging.error(f"Error creating flag file: {e}")
+        st.error("Failed to finish the process. Check the logs for more details.")
+
+
+# Contents of headcount_matching.py
+# src/headcount_matching.py
+
+import pandas as pd
+from rapidfuzz import fuzz, process
+from pathlib import Path
+import json
+import logging
+import re
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def enforce_data_types(df):
+    """
+    Ensure that ID columns, asset tags, and other relevant fields are integers (or strings if needed),
+    while preserving empty values as NaN (and not filling them with 0).
+    """
+    int_columns = ['purchase_id', 'asset_type_id', 'asset_id', 'vendor', 'vendor_id', 'product_id', 'display_id', 'count', 'purchase_assignment']
+    str_columns = ['asset_tag', 'serial_number', 'uuid', 'vendor_name', 'product_name']
+
+    for col in int_columns:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce').astype('Int64')
+
+    for col in str_columns:
+        if col in df.columns:
+            df[col] = df[col].astype(str)
+
+    return df
+
+
+def load_data(data_dir):
+    """
+    Load the employee and asset data from CSV files.
+    """
+    employees_file = data_dir / "filtered_active_employees.csv"
+    assets_file = data_dir / "assets_data_with_assignments.csv"
+
+    try:
+        employees_df = pd.read_csv(employees_file)
+        assets_df = pd.read_csv(assets_file)
+        logging.info("CSV files loaded successfully.")
+    except FileNotFoundError as e:
+        logging.error(f"File not found: {e}")
+        raise
+    except Exception as e:
+        logging.error(f"Error loading CSV files: {e}")
+        raise
+
+    return employees_df, assets_df
+
+def clean_text(text):
+    """
+    Remove HTML tags and extra whitespace from a string.
+    """
+    if pd.isna(text):
+        return ""
+    clean = re.compile('<.*?>')
+    text_no_html = re.sub(clean, '', text)
+    text_clean = ' '.join(text_no_html.strip().split())
+    return text_clean.lower()
+
+def fuzzy_match(name_to_match, choices, threshold=80):
+    """
+    Perform fuzzy matching between a name and a list of choices using RapidFuzz.
+    """
+    if not name_to_match:
+        return None
+
+    match, score, _ = process.extractOne(name_to_match, choices, scorer=fuzz.partial_ratio)
+    if score >= threshold:
+        return match
+    return None
+
+def link_employees_to_assets(employees_df, assets_df):
+    """
+    Link employee data to assets using 'last_logged_username' and 'requester_name'.
+    """
+    employees_df['full_name_clean'] = employees_df['full_name'].apply(clean_text)
+    employee_names = employees_df['full_name_clean'].tolist()
+    name_to_id = dict(zip(employees_df['full_name_clean'], employees_df['employee_id']))
+
+    asset_employee_map = {}
+
+    assets_df['matched_employee_id'] = None
+    assets_df['match_source'] = None
+
+    for index, row in assets_df.iterrows():
+        asset_id = row.get('asset_id')
+        last_logged_username = row.get('last_logged_username', "")
+        requester_name = row.get('requester_name', "")
+
+        last_logged_username_clean = clean_text(last_logged_username)
+        requester_name_clean = clean_text(requester_name)
+
+        matched_employee = None
+
+        if last_logged_username_clean:
+            matched_employee = fuzzy_match(last_logged_username_clean, employee_names)
+            if matched_employee:
+                matched_employee_id = name_to_id.get(matched_employee)
+                assets_df.at[index, 'matched_employee_id'] = matched_employee_id
+                assets_df.at[index, 'match_source'] = 'last_logged_username'
+                asset_employee_map[str(asset_id)] = matched_employee_id
+                continue
+
+        if requester_name_clean:
+            matched_employee = fuzzy_match(requester_name_clean, employee_names)
+            if matched_employee:
+                matched_employee_id = name_to_id.get(matched_employee)
+                assets_df.at[index, 'matched_employee_id'] = matched_employee_id
+                assets_df.at[index, 'match_source'] = 'requester_name'
+                asset_employee_map[str(asset_id)] = matched_employee_id
+
+    logging.info(f"Total assets matched to employees: {len(asset_employee_map)}")
+    return assets_df, asset_employee_map
+
+def save_linked_data(assets_df, data_dir):
+    """
+    Save the linked assets data with matched employees to a new CSV.
+    """
+    output_file = data_dir / "linked_assets_data.csv"
+    try:
+        assets_df.to_csv(output_file, index=False)
+        logging.info(f"Linked data saved to {output_file}")
+    except Exception as e:
+        logging.error(f"Failed to save linked data to {output_file}: {e}")
+        raise
+
+def save_mapping(mapping, filename):
+    """
+    Save a dictionary mapping to a JSON file.
+    """
+    try:
+        with open(filename, 'w') as f:
+            json.dump(mapping, f, indent=4)
+        logging.info(f"Mapping saved to {filename}")
+    except Exception as e:
+        logging.error(f"Failed to save mapping to {filename}: {e}")
+
+def load_mapping(filename):
+    """
+    Load a dictionary mapping from a JSON file.
+    """
+    if not filename.exists():
+        logging.warning(f"Mapping file {filename} not found. A new one will be created.")
+        return {}
+    try:
+        with open(filename, 'r') as f:
+            mapping = json.load(f)
+        logging.info(f"Mapping loaded from {filename}")
+        return mapping
+    except Exception as e:
+        logging.error(f"Failed to load mapping from {filename}: {e}")
+        return {}
+
+def main():
+    """
+    Main function to orchestrate the headcount matching and mapping process.
+    """
+    try:
+        logging.info("Starting headcount matching process...")
+
+        script_path = Path(__file__).resolve()
+        data_dir = script_path.parent.parent / "data"
+
+        data_dir.mkdir(parents=True, exist_ok=True)
+        logging.info(f"Data directory set at {data_dir}")
+
+        employees_df, assets_df = load_data(data_dir)
+        logging.info(f"Loaded {len(employees_df)} employee records and {len(assets_df)} asset records.")
+
+        linked_assets_df, asset_employee_map = link_employees_to_assets(employees_df, assets_df)
+        logging.info(f"Linked {len(asset_employee_map)} assets to employees.")
+
+        linked_assets_df = enforce_data_types(linked_assets_df)
+        save_linked_data(linked_assets_df, data_dir)
+
+        mapping_filename = data_dir / "asset_employee_mapping.json"
+
+        existing_mapping = load_mapping(mapping_filename)
+        logging.info(f"Loaded {len(existing_mapping)} existing mappings.")
+
+        combined_mapping = {**existing_mapping, **asset_employee_map}
+        logging.info(f"Total mappings after update: {len(combined_mapping)}")
+
+        save_mapping(combined_mapping, mapping_filename)
+        logging.info("Headcount matching and mapping completed successfully.")
+
+    except Exception as e:
+        logging.error(f"An error occurred during headcount matching: {e}")
+
+if __name__ == "__main__":
+    main()
+
+
+# Contents of push_to_asset_types.py
+# src/push_to_asset_types.py
+
+import os
+import logging
+from dotenv import load_dotenv
+from pyairtable import Api
+import pandas as pd
+from pathlib import Path
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Load environment variables
+load_dotenv()
+
+# Airtable setup
+API_KEY = os.getenv('AIRTABLE_API_KEY')
+BASE_ID = os.getenv('SANDBOX_BASE_ID')
+ASSET_TYPES_TABLE_ID = os.getenv('ASSET_TYPES_TABLE_ID')
+
+# Setup Airtable client
+airtable = Api(API_KEY)
+asset_types_table = airtable.table(BASE_ID, ASSET_TYPES_TABLE_ID)
+
+# Path to your data directory
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+
+# Dictionary to store mapping between asset_type_id and Airtable record ID
+id_mapping = {}
+
+def load_asset_types_data():
+    """Load asset types data from CSV file."""
+    file_path = DATA_DIR / "asset_types_data.csv"
+    try:
+        asset_types_df = pd.read_csv(file_path)
+        logging.info(f"Loaded asset types data from {file_path}")
+        return asset_types_df
+    except FileNotFoundError as e:
+        logging.error(f"File not found: {file_path}. Error: {e}")
+        raise
+
+def create_or_update_asset_type(row):
+    """Create or update an asset type record in Airtable."""
+    fields = {
+        "name": row['name'],
+        "asset_type_id": str(row['id']),
+        "note": row['description'] if pd.notna(row['description']) else None,
+    }
+
+    try:
+        # Check if record already exists
+        existing_records = asset_types_table.all(fields=['asset_type_id'], formula=f"{{asset_type_id}}='{fields['asset_type_id']}'")
+
+        if existing_records:
+            # Update existing record
+            record_id = existing_records[0]['id']
+            asset_types_table.update(record_id, fields)
+            logging.info(f"Updated asset type: {fields['name']}")
+            id_mapping[str(row['id'])] = record_id
+        else:
+            # Create new record
+            new_record = asset_types_table.create(fields)
+            logging.info(f"Created new asset type: {fields['name']}")
+            id_mapping[str(row['id'])] = new_record['id']
+    except Exception as e:
+        logging.error(f"Error creating/updating asset type: {row['name']}. Error: {e}")
+
+def update_parent_links(asset_types_df):
+    """Update parent asset type links after all records are created."""
+    for _, row in asset_types_df.iterrows():
+        if pd.notna(row['parent_asset_type_id']):
+            parent_id = str(row['parent_asset_type_id']).split('.')[0]  # Remove decimal point if present
+            if parent_id in id_mapping:
+                fields = {
+                    "parent_asset_type": [id_mapping[parent_id]]
+                }
+                try:
+                    asset_types_table.update(id_mapping[str(row['id'])], fields)
+                    logging.info(f"Updated parent link for asset type: {row['name']}")
+                except Exception as e:
+                    logging.error(f"Error updating parent link for asset type: {row['name']}. Error: {e}")
+
+def main():
+    try:
+        asset_types_df = load_asset_types_data()
+
+        # First pass: create or update all records without parent links
+        for _, row in asset_types_df.iterrows():
+            create_or_update_asset_type(row)
+
+        # Second pass: update parent links
+        update_parent_links(asset_types_df)
+
+        logging.info("Asset types upload completed.")
+    except Exception as e:
+        logging.error(f"Error in main execution: {e}")
+
+if __name__ == "__main__":
+    main()
+
+
+# Contents of push_to_departments.py
+# src/push_to_departments.py
+
+import os
+import logging
+from dotenv import load_dotenv
+from pyairtable import Api
+import pandas as pd
+from pathlib import Path
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Load environment variables
+load_dotenv()
+
+# Airtable setup
+API_KEY = os.getenv('AIRTABLE_API_KEY')
+BASE_ID = os.getenv('SANDBOX_BASE_ID')
+DEPARTMENTS_TABLE_ID = os.getenv('DEPARTMENTS_TABLE_ID')
+
+# Setup Airtable client
+airtable = Api(API_KEY)
+departments_table = airtable.table(BASE_ID, DEPARTMENTS_TABLE_ID)
+
+# Path to your data directory
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+
+def load_departments_data():
+    """Load departments data from CSV file."""
+    file_path = DATA_DIR / "departments_data.csv"
+    try:
+        departments_df = pd.read_csv(file_path)
+        logging.info(f"Loaded departments data from {file_path}")
+        return departments_df
+    except FileNotFoundError as e:
+        logging.error(f"File not found: {file_path}. Error: {e}")
+        raise
+
+def create_or_update_department(row):
+    """Create or update a department record in Airtable."""
+    fields = {
+        "name": row['name'],
+        "department_id": str(row['id'])
+    }
+
+    # Remove any fields with None values
+    fields = {k: v for k, v in fields.items() if v is not None}
+
+    try:
+        # Check if record already exists
+        existing_records = departments_table.all(fields=['department_id'], formula=f"{{department_id}}='{fields['department_id']}'")
+
+        if existing_records:
+            # Update existing record
+            record_id = existing_records[0]['id']
+            departments_table.update(record_id, fields)
+            logging.info(f"Updated department: {fields['name']}")
+        else:
+            # Create new record
+            new_record = departments_table.create(fields)
+            logging.info(f"Created new department: {fields['name']}")
+    except Exception as e:
+        logging.error(f"Error creating/updating department: {row['name']}. Error: {e}")
+
+def main():
+    try:
+        departments_df = load_departments_data()
+
+        for _, row in departments_df.iterrows():
+            try:
+                create_or_update_department(row)
+            except Exception as e:
+                logging.error(f"Error processing department {row['name']}: {str(e)}")
+
+        logging.info("Departments upload completed.")
+    except Exception as e:
+        logging.error(f"Error in main execution: {e}")
+
+if __name__ == "__main__":
+    main()
+
+
+# Contents of push_vendors.py
+# src/push_vendors.py
+
+import os
+import ast
+import logging
+from dotenv import load_dotenv
+from pyairtable import Api
+import pandas as pd
+from pathlib import Path
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Load environment variables
+load_dotenv()
+
+# Airtable setup
+API_KEY = os.getenv('AIRTABLE_API_KEY')
+BASE_ID = os.getenv('SANDBOX_BASE_ID')
+VENDORS_TABLE_ID = os.getenv('VENDORS_TABLE_ID')
+
+# Setup Airtable client
+airtable = Api(API_KEY)
+vendors_table = airtable.table(BASE_ID, VENDORS_TABLE_ID)
+
+# Path to your data directory
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+
+def load_vendors_data():
+    """Load vendors data from CSV file."""
+    file_path = DATA_DIR / "vendors_data.csv"
+    try:
+        vendors_df = pd.read_csv(file_path)
+        logging.info(f"Loaded vendors data from {file_path}")
+        return vendors_df
+    except FileNotFoundError as e:
+        logging.error(f"File not found: {file_path}. Error: {e}")
+        raise
+
+def parse_address(address_str):
+    """Parse the address string into a dictionary."""
+    try:
+        return ast.literal_eval(address_str)
+    except (ValueError, SyntaxError) as e:
+        logging.warning(f"Failed to parse address: {address_str}. Error: {e}")
+        return {}
+
+def create_or_update_vendor(row):
+    """Create or update a vendor record in Airtable."""
+    address = parse_address(row['address'])
+
+    fields = {
+        "name": row['name'],
+        "vendor_id": str(row['id']),
+        "contact_name": row['contact_name'] if pd.notna(row['contact_name']) else None,
+        "email": row['email'] if pd.notna(row['email']) else None,
+        "mobile": row['mobile'] if pd.notna(row['mobile']) else None,
+        "address": ', '.join(filter(None, [
+            address.get('line1'),
+            address.get('city'),
+            address.get('state'),
+            address.get('country'),
+            address.get('zipcode')
+        ]))
+    }
+
+    # Remove any fields with None or empty string values
+    fields = {k: v for k, v in fields.items() if v not in (None, '')}
+
+    try:
+        # Check if record already exists
+        existing_records = vendors_table.all(fields=['vendor_id'], formula=f"{{vendor_id}}='{fields['vendor_id']}'")
+
+        if existing_records:
+            # Update existing record
+            record_id = existing_records[0]['id']
+            vendors_table.update(record_id, fields)
+            logging.info(f"Updated vendor: {fields['name']}")
+        else:
+            # Create new record
+            new_record = vendors_table.create(fields)
+            logging.info(f"Created new vendor: {fields['name']}")
+    except Exception as e:
+        logging.error(f"Error creating/updating vendor {fields['name']}: {str(e)}")
+
+def main():
+    try:
+        vendors_df = load_vendors_data()
+
+        for _, row in vendors_df.iterrows():
+            try:
+                create_or_update_vendor(row)
+            except Exception as e:
+                logging.error(f"Error processing vendor {row['name']}: {str(e)}")
+
+        logging.info("Vendors upload completed.")
+    except Exception as e:
+        logging.error(f"Error in main execution: {e}")
+
+if __name__ == "__main__":
+    main()
+
+
+# Contents of push_to_products.py
+# src/push_to_products.py
+
+import os
+import logging
+from dotenv import load_dotenv
+from pyairtable import Api
+import pandas as pd
+from pathlib import Path
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Load environment variables
+load_dotenv()
+
+# Airtable setup
+API_KEY = os.getenv('AIRTABLE_API_KEY')
+BASE_ID = os.getenv('SANDBOX_BASE_ID')
+PRODUCTS_TABLE_ID = os.getenv('PRODUCTS_TABLE_ID')
+
+# Setup Airtable client
+airtable = Api(API_KEY)
+products_table = airtable.table(BASE_ID, PRODUCTS_TABLE_ID)
+
+# Path to your data directory
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+
+def load_products_data():
+    """Load products data from CSV file."""
+    file_path = DATA_DIR / "products_data.csv"
+    try:
+        products_df = pd.read_csv(file_path)
+        logging.info(f"Loaded products data from {file_path}")
+        return products_df
+    except FileNotFoundError as e:
+        logging.error(f"File not found: {file_path}. Error: {e}")
+        raise
+
+def create_or_update_product(row):
+    """Create or update a product record in Airtable."""
+    fields = {
+        "name": row['name'],
+        "product_id": str(row['id']),
+        "manufacturer": row['manufacturer'] if pd.notna(row['manufacturer']) else None,
+        "description": row['description_text'] if pd.notna(row['description_text']) else None,
+    }
+
+    # Remove any fields with None values
+    fields = {k: v for k, v in fields.items() if v is not None}
+
+    try:
+        # Check if record already exists
+        existing_records = products_table.all(fields=['product_id'], formula=f"{{product_id}}='{fields['product_id']}'")
+
+        if existing_records:
+            # Update existing record
+            record_id = existing_records[0]['id']
+            products_table.update(record_id, fields)
+            logging.info(f"Updated product: {fields['name']}")
+        else:
+            # Create new record
+            new_record = products_table.create(fields)
+            logging.info(f"Created new product: {fields['name']}")
+    except Exception as e:
+        logging.error(f"Error creating/updating product: {row['name']}. Error: {e}")
+
+def main():
+    try:
+        products_df = load_products_data()
+
+        for _, row in products_df.iterrows():
+            try:
+                create_or_update_product(row)
+            except Exception as e:
+                logging.error(f"Error processing product {row['name']}: {str(e)}")
+
+        logging.info("Products upload completed.")
+    except Exception as e:
+        logging.error(f"Error in main execution: {e}")
+
+if __name__ == "__main__":
+    main()
+
+
+# Contents of push_to_purchases.py
+# src/push_to_purchases.py
+
+import os
+import logging
+from dotenv import load_dotenv
+from pyairtable import Api
+import pandas as pd
+from pathlib import Path
+from datetime import datetime, timezone
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Load environment variables
+load_dotenv()
+
+# Airtable setup
+API_KEY = os.getenv('AIRTABLE_API_KEY')
+BASE_ID = os.getenv('SANDBOX_BASE_ID')
+PURCHASES_TABLE_ID = os.getenv('PURCHASES_TABLE_ID')
+
+# Setup Airtable client
+airtable = Api(API_KEY)
+purchases_table = airtable.table(BASE_ID, PURCHASES_TABLE_ID)
+
+# Path to your data directory
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+
+def load_purchases_data():
+    """Load purchases data from CSV file."""
+    file_path = DATA_DIR / "netsuite_data_cleaned.csv"
+    try:
+        purchases_df = pd.read_csv(file_path)
+        logging.info(f"Loaded purchases data from {file_path}")
+        return purchases_df
+    except FileNotFoundError as e:
+        logging.error(f"File not found: {file_path}. Error: {e}")
+        raise
+
+def parse_date(date_string):
+    if pd.isna(date_string):
+        return None
+    try:
+        # Parse ISO 8601 format
+        dt = datetime.fromisoformat(date_string.replace('Z', '+00:00'))
+        # Convert to UTC and format as YYYY-MM-DD
+        return dt.astimezone(timezone.utc).strftime('%Y-%m-%d')
+    except ValueError:
+        try:
+            # Fallback to parsing just the date portion
+            return datetime.strptime(date_string[:10], '%Y-%m-%d').strftime('%Y-%m-%d')
+        except ValueError:
+            logging.warning(f"Could not parse date {date_string}")
+            return None
+
+def create_or_update_purchase(row):
+    """Create or update a purchase record in Airtable."""
+    fields = {
+        "purchase_id": str(row['purchase_id']),  # Convert to string
+        "reference": row['reference'] if pd.notna(row['reference']) else None,
+        "date": parse_date(row['date']),
+        "cost": float(row['cost']) if pd.notna(row['cost']) else None,
+        "description": row['description'] if pd.notna(row['description']) else None,
+        "count": int(row['count']) if pd.notna(row['count']) else None,
+        "note": row['note'] if pd.notna(row['note']) else None,
+        "item": row['item'] if pd.notna(row['item']) else None,
+    }
+
+    # Remove any fields with None values
+    fields = {k: v for k, v in fields.items() if v is not None}
+
+    try:
+        # Check if record already exists
+        existing_records = purchases_table.all(fields=['purchase_id'], formula=f"{{purchase_id}}='{fields['purchase_id']}'")
+
+        if existing_records:
+            # Update existing record
+            record_id = existing_records[0]['id']
+            purchases_table.update(record_id, fields)
+            logging.info(f"Updated purchase: {fields['purchase_id']}")
+        else:
+            # Create new record
+            new_record = purchases_table.create(fields)
+            logging.info(f"Created new purchase: {fields['purchase_id']}")
+    except Exception as e:
+        logging.error(f"Error creating/updating purchase: {row['purchase_id']}. Error: {e}")
+
+def main():
+    try:
+        purchases_df = load_purchases_data()
+
+        for _, row in purchases_df.iterrows():
+            try:
+                create_or_update_purchase(row)
+            except Exception as e:
+                logging.error(f"Error processing purchase {row['purchase_id']}: {str(e)}")
+
+        logging.info("Purchases upload completed.")
+    except Exception as e:
+        logging.error(f"Error in main execution: {e}")
+
+if __name__ == "__main__":
+    main()
+
+
+# Contents of push_to_assets.py
+# src/push_to_assets.py
+
+import os
+import logging
+from dotenv import load_dotenv
+from pyairtable import Api
+import pandas as pd
+from datetime import datetime, timezone
+from pathlib import Path
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Load environment variables
+load_dotenv()
+
+# Airtable setup
+API_KEY = os.getenv('AIRTABLE_API_KEY')
+BASE_ID = os.getenv('SANDBOX_BASE_ID')
+ASSETS_TABLE_ID = os.getenv('ASSETS_TABLE_ID')
+
+# Setup Airtable client
+airtable = Api(API_KEY)
+assets_table = airtable.table(BASE_ID, ASSETS_TABLE_ID)
+
+# Path to your data directory
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+
+def parse_date(date_string):
+    if pd.isna(date_string):
+        return None
+    try:
+        # Parse ISO 8601 format
+        dt = datetime.fromisoformat(date_string.replace('Z', '+00:00'))
+        # Convert to UTC and format as YYYY-MM-DD
+        return dt.astimezone(timezone.utc).strftime('%Y-%m-%d')
+    except ValueError:
+        try:
+            # Fallback to parsing just the date portion
+            return datetime.strptime(date_string[:10], '%Y-%m-%d').strftime('%Y-%m-%d')
+        except ValueError:
+            logging.warning(f"Could not parse date: {date_string}")
+            return None
+
+def load_assets_data():
+    """Load assets data from CSV file."""
+    file_path = DATA_DIR / "assets_data_cleaned.csv"
+    try:
+        assets_df = pd.read_csv(file_path)
+        logging.info(f"Loaded assets data from {file_path}")
+        return assets_df
+    except FileNotFoundError as e:
+        logging.error(f"File not found: {file_path}. Error: {e}")
+        raise
+
+def create_or_update_asset(row):
+    """Create or update an asset record in Airtable."""
+    fields = {
+        "asset_id": str(row['asset_id']),  # Convert to string
+        "name": row['name'],
+        "cost": float(row['cost']) if pd.notna(row['cost']) else None,
+        "description": row['description'] if pd.notna(row['description']) else None,
+        "serial_number": row['serial_number'] if pd.notna(row['serial_number']) else None,
+        "acquisition_date": parse_date(row['acquisition_date']),
+        "created_at": parse_date(row['created_at']),
+        "assigned_on": parse_date(row['assigned_on']),
+        "asset_state": row['asset_state'] if pd.notna(row['asset_state']) else None,
+        "display_id": str(row['display_id']) if pd.notna(row['display_id']) else None  # Add display_id field
+    }
+
+    # Remove any fields with None values
+    fields = {k: v for k, v in fields.items() if v is not None}
+
+    try:
+        # Check if record already exists
+        existing_records = assets_table.all(fields=['asset_id'], formula=f"{{asset_id}}='{fields['asset_id']}'")
+
+        if existing_records:
+            # Update existing record
+            record_id = existing_records[0]['id']
+            assets_table.update(record_id, fields)
+            logging.info(f"Updated asset: {fields['name']}")
+        else:
+            # Create new record
+            new_record = assets_table.create(fields)
+            logging.info(f"Created new asset: {fields['display_id']}")
+    except Exception as e:
+        logging.error(f"Error creating/updating asset {row['display_id']}: {e}")
+
+def main():
+    try:
+        assets_df = load_assets_data()
+
+        for _, row in assets_df.iterrows():
+            create_or_update_asset(row)
+
+        logging.info("Assets upload completed.")
+    except Exception as e:
+        logging.error(f"Error in main execution: {e}")
+
+if __name__ == "__main__":
+    main()
+
+
+# Contents of link_tables.py
+# src/link_tables.py
+
+import os
+import logging
+from dotenv import load_dotenv
+from pyairtable import Api
+import pandas as pd
+from pathlib import Path
+
+# Set up logging with a cleaner message format
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
+# Load environment variables
+load_dotenv()
+
+# Airtable setup
+API_KEY = os.getenv('AIRTABLE_API_KEY')
+BASE_ID = os.getenv('SANDBOX_BASE_ID')
+ASSETS_TABLE_ID = os.getenv('ASSETS_TABLE_ID')
+EMPLOYEES_TABLE_ID = os.getenv('EMPLOYEES_TABLE_ID')
+DEPARTMENTS_TABLE_ID = os.getenv('DEPARTMENTS_TABLE_ID')
+PRODUCTS_TABLE_ID = os.getenv('PRODUCTS_TABLE_ID')
+VENDORS_TABLE_ID = os.getenv('VENDORS_TABLE_ID')
+ASSET_TYPES_TABLE_ID = os.getenv('ASSET_TYPES_TABLE_ID')
+PURCHASES_TABLE_ID = os.getenv('PURCHASES_TABLE_ID')
+
+# Setup Airtable client
+airtable = Api(API_KEY)
+assets_table = airtable.table(BASE_ID, ASSETS_TABLE_ID)
+employees_table = airtable.table(BASE_ID, EMPLOYEES_TABLE_ID)
+departments_table = airtable.table(BASE_ID, DEPARTMENTS_TABLE_ID)
+products_table = airtable.table(BASE_ID, PRODUCTS_TABLE_ID)
+vendors_table = airtable.table(BASE_ID, VENDORS_TABLE_ID)
+asset_types_table = airtable.table(BASE_ID, ASSET_TYPES_TABLE_ID)
+purchases_table = airtable.table(BASE_ID, PURCHASES_TABLE_ID)
+
+# Path to your data directory
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+
+def load_data(filename):
+    """Load data from CSV file."""
+    file_path = DATA_DIR / filename
+    try:
+        data = pd.read_csv(file_path)
+        logging.info(f"Loaded data from {file_path}")
+        return data
+    except FileNotFoundError as e:
+        logging.error(f"File not found: {file_path}. Error: {e}")
+        raise
+
+def get_or_create_record_by_id(table, id_field, record_id, extra_fields=None):
+    """Get or create a record by ID."""
+    records = table.all(fields=[id_field], formula=f"{{{id_field}}}='{record_id}'")
+    if records:
+        return records[0]['id']
+    else:
+        fields = {id_field: record_id}
+        if extra_fields:
+            fields.update(extra_fields)
+        new_record = table.create(fields)
+        return new_record['id']
+
+# Link functions
+def link_asset_to_employee(assets_df):
+    """Link assets to employees using matched_employee_id."""
+    logging.info("Starting to link employees to assets")
+    count = 0
+    for _, row in assets_df.iterrows():
+        if pd.notna(row['matched_employee_id']):
+            employee_id = str(int(row['matched_employee_id']))
+            asset_id = str(int(row['asset_id']))
+
+            try:
+                employee_airtable_id = get_or_create_record_by_id(employees_table, 'employee_id', employee_id)
+                asset_airtable_id = get_or_create_record_by_id(assets_table, 'asset_id', asset_id)
+                assets_table.update(asset_airtable_id, {'assigned_to': [employee_airtable_id]})
+                logging.info(f"Linked employee '{employee_id}' to asset '{asset_id}'")
+                count += 1
+            except Exception as e:
+                logging.error(f"Failed to link employee '{employee_id}' to asset '{asset_id}': {str(e)}")
+    logging.info(f"Finished linking {count} employees to assets")
+
+def link_employee_to_department(assets_df, departments_df):
+    """Link employees to departments using the department_id from assets data."""
+    logging.info("Starting to link employees to departments")
+    count = 0
+    for _, row in assets_df.iterrows():
+        employee_id = str(int(row['matched_employee_id'])) if pd.notna(row['matched_employee_id']) else None
+        department_id = str(int(row['department_id'])) if pd.notna(row['department_id']) else None
+
+        if employee_id and department_id:
+            try:
+                department_airtable_id = get_or_create_record_by_id(departments_table, 'department_id', department_id)
+                employee_airtable_id = get_or_create_record_by_id(employees_table, 'employee_id', employee_id)
+                employees_table.update(employee_airtable_id, {'department': [department_airtable_id]})
+                logging.info(f"Linked employee '{employee_id}' to department '{department_id}'")
+                count += 1
+            except Exception as e:
+                logging.error(f"Failed to link employee '{employee_id}' to department '{department_id}': {str(e)}")
+    logging.info(f"Finished linking {count} employees to departments")
+
+def link_asset_to_product(assets_df):
+    """Link assets to products using product_id."""
+    logging.info("Starting to link assets to products")
+    count = 0
+    for _, row in assets_df.iterrows():
+        if pd.notna(row['product_id']):
+            product_id = str(int(row['product_id']))
+            asset_id = row['asset_id']
+
+            try:
+                asset_airtable_id = get_or_create_record_by_id(assets_table, 'asset_id', asset_id)
+                product_airtable_id = get_or_create_record_by_id(products_table, 'product_id', product_id)
+                assets_table.update(asset_airtable_id, {'product': [product_airtable_id]})
+                logging.info(f"Linked asset '{asset_id}' to product '{product_id}'")
+                count += 1
+            except Exception as e:
+                logging.error(f"Failed to link asset '{asset_id}' to product '{product_id}': {str(e)}")
+    logging.info(f"Finished linking {count} assets to products")
+
+def link_asset_to_vendor(assets_df):
+    """Link assets to vendors using vendor_id."""
+    logging.info("Starting to link assets to vendors")
+    count = 0
+    for _, row in assets_df.iterrows():
+        if pd.notna(row['vendor_id']):
+            vendor_id = str(int(row['vendor_id']))
+            asset_id = row['asset_id']
+
+            try:
+                asset_airtable_id = get_or_create_record_by_id(assets_table, 'asset_id', asset_id)
+                vendor_airtable_id = get_or_create_record_by_id(vendors_table, 'vendor_id', vendor_id)
+                assets_table.update(asset_airtable_id, {'vendor': [vendor_airtable_id]})
+                logging.info(f"Linked asset '{asset_id}' to vendor '{vendor_id}'")
+                count += 1
+            except Exception as e:
+                logging.error(f"Failed to link asset '{asset_id}' to vendor '{vendor_id}': {str(e)}")
+    logging.info(f"Finished linking {count} assets to vendors")
+
+def link_product_to_asset_type(assets_df):
+    """Link products to asset types using asset_type_id."""
+    logging.info("Starting to link products to asset types")
+    count = 0
+    for _, row in assets_df.iterrows():
+        if pd.notna(row['asset_type_id']):
+            asset_type_id = str(int(row['asset_type_id']))
+            product_id = str(int(row['product_id']))
+
+            try:
+                product_airtable_id = get_or_create_record_by_id(products_table, 'product_id', product_id)
+                asset_type_airtable_id = get_or_create_record_by_id(asset_types_table, 'asset_type_id', asset_type_id)
+                products_table.update(product_airtable_id, {'asset_type': [asset_type_airtable_id]})
+                logging.info(f"Linked product '{product_id}' to asset type '{asset_type_id}'")
+                count += 1
+            except Exception as e:
+                logging.error(f"Failed to link product '{product_id}' to asset type '{asset_type_id}': {str(e)}")
+    logging.info(f"Finished linking {count} products to asset types")
+
+def link_asset_to_purchase(assets_df):
+    """Link assets to purchases using asset_id and purchase_id."""
+    logging.info("Starting to link assets to purchases")
+    count = 0
+    for _, row in assets_df.iterrows():
+        asset_id = row['asset_id']
+        purchase_id = row['purchase_assignment']
+
+        if pd.notna(purchase_id) and asset_id:
+            try:
+                asset_airtable_id = get_or_create_record_by_id(assets_table, 'asset_id', asset_id)
+                purchase_airtable_id = get_or_create_record_by_id(purchases_table, 'purchase_id', str(int(purchase_id)))
+                assets_table.update(asset_airtable_id, {'fldUb6ku52ZBWbM6y': [purchase_airtable_id]})
+                logging.info(f"Linked asset '{asset_id}' to purchase '{purchase_id}'")
+                count += 1
+            except Exception as e:
+                logging.error(f"Failed to link asset '{asset_id}' to purchase '{purchase_id}': {str(e)}")
+    logging.info(f"Finished linking {count} assets to purchases")
+
+# Main function to link all specified entities
+def main():
+    logging.info("Loading assets data")
+    assets_df = load_data("linked_assets_data.csv")
+    departments_df = load_data("departments_data.csv")
+
+    # Link assets to employees
+    link_asset_to_employee(assets_df)
+
+    # Link employees to departments
+    link_employee_to_department(assets_df, departments_df)
+
+    # Link assets to products
+    link_asset_to_product(assets_df)
+
+    # Link assets to vendors
+    link_asset_to_vendor(assets_df)
+
+    # Link products to asset types
+    link_product_to_asset_type(assets_df)
+
+    # Link assets to purchases
+    link_asset_to_purchase(assets_df)
+
+    logging.info("All linking operations completed.")
+
+if __name__ == "__main__":
+    main()
+
+
+
+
+# main.py (Pipeline Orchestration)
+
+import os
+from pathlib import Path
+from subprocess import Popen, PIPE
+import logging
+
+# Setup logging configuration
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
+# Define the data directory and paths to scripts
+DATA_DIR = Path(__file__).resolve().parent / "data"
+FLAG_FILE = DATA_DIR / "streamlit_done.flag"
+STREAMLIT_APP = DATA_DIR.parent / "src" / "matching_streamlit_app.py"
+LAPTOP_MATCHING_SCRIPT = DATA_DIR.parent / "src" / "laptop_matching.py"
+
+def run_script(script_path):
+    """Helper function to run a script and handle errors."""
+    try:
+        result = os.system(f"python {script_path}")
+        if result != 0:
+            logging.error(f"Script {script_path} failed with exit code {result}.")
+            return False
+        return True
+    except Exception as e:
+        logging.error(f"Error running {script_path}: {str(e)}")
+        return False
+
+def run_automated_steps():
+    """Run the automated data retrieval, processing, and cleaning steps of the pipeline."""
+    logging.info("Starting data retrieval and processing...")
+
+    # Call necessary scripts to retrieve and process the data from Freshservice and Airtable
+    scripts = [
+        "src/data_retrieval_freshservice.py",
+        "src/data_retrieval_airtable.py",
+        "src/data_processing_freshservice.py",
+        "src/data_processing_headcount.py",
+        "src/data_standardization.py"
+    ]
+
+    for script in scripts:
+        if not run_script(script):
+            logging.error(f"Error in processing: {script}")
+            return False
+
+    logging.info("Data retrieval, processing, and standardization completed.")
+    return True
+
+def prompt_user_for_matching():
+    """Prompt the user to decide whether to manually match assets or proceed with automatic matching."""
+    while True:
+        user_input = input("Do you want to manually match assets with purchases (yes/no)? ").lower()
+        if user_input in ["yes", "no"]:
+            return user_input == "yes"
+        logging.warning("Invalid input. Please enter 'yes' or 'no'.")
+
+def run_manual_matching():
+    """Launch the Streamlit app for manual matching."""
+    logging.info("Launching Streamlit app for manual matching...")
+
+    # Clear the flag file if it exists
+    if FLAG_FILE.exists():
+        FLAG_FILE.unlink()
+
+    # Launch the Streamlit app for manual matching
+    process = Popen(['streamlit', 'run', str(STREAMLIT_APP)], stdout=PIPE, stderr=PIPE)
+    logging.info("Streamlit app running. Please complete manual matching.")
+
+    # Wait for the user to complete the manual matching
+    input("Press Enter when the Streamlit matching is done...")
+
+    # Check if the Streamlit app has completed by verifying the flag file
+    if FLAG_FILE.exists():
+        logging.info("Manual matching completed.")
+    else:
+        logging.warning("Streamlit app finished without creating the completion flag.")
+
+    process.terminate()
+
+def run_automatic_matching():
+    """Run the automatic matching process using laptop_matching.py."""
+    logging.info("Running automatic matching...")
+    if run_script(LAPTOP_MATCHING_SCRIPT):
+        logging.info("Automatic matching completed.")
+    else:
+        logging.error("Automatic matching failed.")
+
+def run_push_scripts():
+    """Run scripts to push data to Airtable."""
+    push_scripts = [
+        "src/push_to_asset_types.py",
+        "src/push_to_assets.py",
+        "src/push_to_departments.py",
+        "src/push_to_products.py",
+        "src/push_vendors.py",
+        "src/push_to_purchases.py",
+        "src/push_to_employees.py"
+    ]
+
+    for script in push_scripts:
+        if not run_script(script):
+            logging.error(f"Failed to push data: {script}")
+            return False
+
+    logging.info("Data pushed to Airtable successfully.")
+    return True
+
+def main():
+    """Main pipeline orchestration function."""
+    # Step 1: Run the automated data retrieval and processing steps
+    if not run_automated_steps():
+        logging.error("Pipeline terminated due to errors in data processing.")
+        return
+
+    # Step 2: Ask the user whether they want to perform manual matching or proceed with automatic matching
+    if prompt_user_for_matching():
+        run_manual_matching()
+    else:
+        run_automatic_matching()
+
+    # Step 3: Proceed with headcount matching and push data to Airtable
+    logging.info("Starting headcount matching and pushing to Airtable...")
+    if not run_script("src/headcount_matching.py"):
+        logging.error("Headcount matching failed. Exiting pipeline.")
+        return
+
+    if not run_push_scripts():
+        logging.error("Data push to Airtable failed. Exiting pipeline.")
+        return
+
+    # Step 4: Link tables in Airtable
+    logging.info("Linking tables in Airtable...")
+    if run_script("src/link_tables.py"):
+        logging.info("Pipeline completed successfully.")
+    else:
+        logging.error("Failed to link tables. Exiting pipeline.")
+
+if __name__ == "__main__":
+    main()

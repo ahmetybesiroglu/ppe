@@ -1,0 +1,40 @@
+id,created_at,updated_at,name,manufacturer,asset_type_id,description,description_text,depreciation_type_id,status,mode_of_procurement
+20000111164,2022-07-22T17:36:53Z,2022-07-22T17:36:53Z,Air pod Pro ,Apple,20000254041,<div>Air Pod pros from Apple </div>,Air Pod pros from Apple ,,In Production,Buy
+20000166229,2023-08-22T18:58:40Z,2023-08-22T18:58:40Z,Apple MacBook Pro 14,Apple Inc.,20000254066,<div>Not given.</div>,Not given.,,In Production,Both
+20000171158,2023-09-14T21:02:30Z,2023-09-14T21:02:30Z,Apple MacBook Pro 16,Apple Inc.,20000254066,<div>Not given.</div>,Not given.,,In Production,Both
+20000122417,2022-09-06T14:24:08Z,2022-09-06T14:24:08Z,Apple Magic keyboard ,Apple,20000254041,<div>Apple Magic Keyboard </div>,Apple Magic Keyboard ,,In Production,Buy
+20000122414,2022-09-06T14:12:40Z,2022-09-06T14:12:40Z,Apple Magic Mouse ,Apple,20000254041,<div>Apple Magic Mouse </div>,Apple Magic Mouse ,,In Production,Buy
+20000112879,2022-08-04T18:52:41Z,2022-08-04T18:52:41Z,Apple Pencil 2nd Gen,Apple,20000254041,<div>Apple pencil 2nd Generation </div>,Apple pencil 2nd Generation ,,In Production,Buy
+20000061775,2022-04-22T17:25:35Z,2022-07-08T21:04:48Z,Dell Latitude 3520,Dell,20000254066,,,,In Production,Both
+20000135841,2022-11-28T19:30:04Z,2022-11-28T19:30:04Z,Dell lattitude 3550,,20000254066,<div>Not given.</div>,Not given.,,In Production,Both
+20000061910,2022-04-22T19:38:41Z,2022-04-22T19:38:41Z,Dell XPS,,20000254066,<div>Not given.</div>,Not given.,,In Production,Both
+20000138363,2023-01-06T16:20:32Z,2023-01-06T16:20:32Z,Google Pixel 6a,Google,20000254049,<div>Not given.</div>,Not given.,,In Production,Both
+20000132979,2022-10-26T15:26:03Z,2022-10-26T15:26:03Z,Google Pixel 7 Pro ,Google ,20000254049,<div>Not given.</div>,Not given.,,In Production,Buy
+20000020422,2022-02-23T17:17:48Z,2022-02-23T17:17:48Z,IdeaPad 5,,20000254041,<div>Not given.</div>,Not given.,,In Production,Both
+20000061777,2022-04-22T17:25:35Z,2022-04-22T17:25:35Z,IdeaPad 5 Laptop,,20000254066,<div>Not given.</div>,Not given.,,In Production,Both
+20000020427,2022-02-23T17:17:53Z,2022-02-23T17:17:53Z,iMac 27,,20000254041,<div>Not given.</div>,Not given.,,In Production,Both
+20000115177,2022-08-18T20:35:22Z,2022-08-18T20:35:22Z,"Ipad Pro 11""",Apple,20000254041,"<div>Apple ipad pro 11""</div>","Apple ipad pro 11""",,In Production,Buy
+20000020434,2022-02-23T17:17:55Z,2022-02-23T17:17:55Z,iPad Pro 12.9,,20000254041,<div>Not given.</div>,Not given.,,In Production,Both
+20000112881,2022-08-04T19:29:32Z,2022-08-04T19:33:14Z,Ipad Smart Folio ,Apple,20000254041,"<div>Apple Smart Folio Case</div><p>for Ipad Pro 12.9'</p>
+",Apple Smart Folio Case  for Ipad Pro 12.9',,In Production,Buy
+20000115179,2022-08-18T20:36:52Z,2022-08-18T20:36:52Z,"Ipad Smart Folio Case 11""",Apple,20000254041,"<div>Ipad Smart Folio Case 11""</div>","Ipad Smart Folio Case 11""",,In Production,Buy
+20000113051,2022-08-05T19:22:56Z,2022-08-05T19:22:56Z,Ipad Smart Folio Case 12.9',Apple,20000254041,"<div>Ipad Smart Folio Case for the 12.9"" ipad </div>","Ipad Smart Folio Case for the 12.9"" ipad ",,In Production,Buy
+20000100149,2022-06-24T19:48:21Z,2022-06-24T19:48:21Z,Iphone 13,Apple,20000254071,<div>Not given.</div>,Not given.,,In Production,Both
+20000166327,2023-08-23T17:56:25Z,2023-08-23T17:56:25Z,Latitude 3520,Dell Inc.,20000254066,<div>Not given.</div>,Not given.,,In Production,Both
+20000166232,2023-08-22T19:23:58Z,2023-08-22T19:23:58Z,Latitude 5520,Dell Inc.,20000254066,<div>Not given.</div>,Not given.,,In Production,Both
+20000061779,2022-04-22T17:25:42Z,2022-04-22T17:25:42Z,Lenovo 15.6 inch,,20000254066,<div>Not given.</div>,Not given.,,In Production,Both
+20000020433,2022-02-23T17:17:55Z,2022-02-23T17:17:55Z,Mac mini,,20000254041,<div>Not given.</div>,Not given.,,In Production,Both
+20000061781,2022-04-22T17:25:51Z,2022-04-22T17:25:51Z,Mac Studio,,20000254066,<div>Not given.</div>,Not given.,,In Production,Both
+20000061776,2022-04-22T17:25:35Z,2022-04-22T17:25:35Z,Macbook Air,,20000254066,<div>Not given.</div>,Not given.,,In Production,Both
+20000061911,2022-04-22T19:38:41Z,2022-07-08T21:00:45Z,"Macbook Pro 13""",Apple,20000254066,,,,In Production,Both
+20000100933,2022-06-29T21:46:03Z,2022-06-29T21:46:03Z,"Macbook Pro 14""",Apple,20000254066,<div>Not given.</div>,Not given.,,In Production,Both
+20000020435,2022-02-23T17:17:59Z,2022-07-08T20:58:55Z,"MacBook Pro 15""",Apple,20000254041,,,,In Production,Both
+20000100199,2022-06-24T20:28:49Z,2022-06-24T20:28:49Z,"Macbook Pro 16""",Apple ,20000254066,<div>Not given.</div>,Not given.,,In Production,Both
+20000020432,2022-02-23T17:17:55Z,2022-02-23T17:17:55Z,Opticbook A300 Plus,,20000254041,<div>Not given.</div>,Not given.,,In Production,Both
+20000020454,2022-02-23T17:53:59Z,2022-02-23T17:53:59Z,Precision 5540,,20000254041,<div>Not given.</div>,Not given.,,In Production,Both
+20000020425,2022-02-23T17:17:52Z,2022-02-23T17:17:52Z,Surface book,,20000254041,<div>Not given.</div>,Not given.,,In Production,Both
+20000020429,2022-02-23T17:17:53Z,2022-02-23T17:17:53Z,UAP-AC-Pro,,20000254041,<div>Not given.</div>,Not given.,,In Production,Both
+20000020428,2022-02-23T17:17:53Z,2022-02-23T17:17:53Z,UDM Pro,,20000254041,<div>Not given.</div>,Not given.,,In Production,Both
+20000020430,2022-02-23T17:17:54Z,2022-02-23T17:17:54Z,XPS 13,,20000254041,<div>Not given.</div>,Not given.,,In Production,Both
+20000020426,2022-02-23T17:17:53Z,2022-02-23T17:17:53Z,XPS 15,,20000254041,<div>Not given.</div>,Not given.,,In Production,Both
+20000166227,2023-08-22T18:44:08Z,2023-08-22T18:44:08Z,XPS 15 9500,Dell Inc.,20000254066,<div>Not given.</div>,Not given.,,In Production,Both

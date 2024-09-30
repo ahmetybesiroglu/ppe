@@ -1,9 +1,10 @@
-# main.py (Pipeline Orchestration)
-
 import os
+import sys
 from pathlib import Path
 from subprocess import Popen, PIPE
 import logging
+import argparse
+import time
 
 # Setup logging configuration
 logging.basicConfig(
@@ -34,7 +35,6 @@ def run_automated_steps():
     """Run the automated data retrieval, processing, and cleaning steps of the pipeline."""
     logging.info("Starting data retrieval and processing...")
 
-    # Call necessary scripts to retrieve and process the data from Freshservice and Airtable
     scripts = [
         "src/data_retrieval_freshservice.py",
         "src/data_retrieval_airtable.py",
@@ -51,14 +51,6 @@ def run_automated_steps():
     logging.info("Data retrieval, processing, and standardization completed.")
     return True
 
-def prompt_user_for_matching():
-    """Prompt the user to decide whether to manually match assets or proceed with automatic matching."""
-    while True:
-        user_input = input("Do you want to manually match assets with purchases (yes/no)? ").lower()
-        if user_input in ["yes", "no"]:
-            return user_input == "yes"
-        logging.warning("Invalid input. Please enter 'yes' or 'no'.")
-
 def run_manual_matching():
     """Launch the Streamlit app for manual matching."""
     logging.info("Launching Streamlit app for manual matching...")
@@ -71,15 +63,11 @@ def run_manual_matching():
     process = Popen(['streamlit', 'run', str(STREAMLIT_APP)], stdout=PIPE, stderr=PIPE)
     logging.info("Streamlit app running. Please complete manual matching.")
 
-    # Wait for the user to complete the manual matching
-    input("Press Enter when the Streamlit matching is done...")
+    # Wait for the Streamlit app to create the completion flag
+    while not FLAG_FILE.exists():
+        time.sleep(5)  # Check every 5 seconds
 
-    # Check if the Streamlit app has completed by verifying the flag file
-    if FLAG_FILE.exists():
-        logging.info("Manual matching completed.")
-    else:
-        logging.warning("Streamlit app finished without creating the completion flag.")
-
+    logging.info("Manual matching completed.")
     process.terminate()
 
 def run_automatic_matching():
@@ -112,13 +100,18 @@ def run_push_scripts():
 
 def main():
     """Main pipeline orchestration function."""
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description="Pipeline with optional Streamlit app")
+    parser.add_argument('--streamlit', action='store_true', help="Launch Streamlit app for manual matching")
+    args = parser.parse_args()
+
     # Step 1: Run the automated data retrieval and processing steps
     if not run_automated_steps():
         logging.error("Pipeline terminated due to errors in data processing.")
         return
 
-    # Step 2: Ask the user whether they want to perform manual matching or proceed with automatic matching
-    if prompt_user_for_matching():
+    # Step 2: Decide whether to run manual matching with Streamlit or automatic matching
+    if args.streamlit:
         run_manual_matching()
     else:
         run_automatic_matching()

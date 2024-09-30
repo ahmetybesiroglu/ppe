@@ -11,6 +11,7 @@ AssetTracker is an advanced inventory management system designed to streamline t
   - [Environment Variables](#environment-variables)
   - [Airtable Base Schema](#airtable-base-schema)
 - [Usage](#usage)
+  - [Running the Inventory Management Pipeline](#running-the-inventory-management-pipeline)
 - [Workflow Overview](#workflow-overview)
 - [Scripts Explanation](#scripts-explanation)
 - [Dependencies](#dependencies)
@@ -214,7 +215,9 @@ This table lists products.
 
 - **Fields:**
   - `name` (Text): Product name.
-  - `product_id` (Text): Unique product ID.
+  - `product_id` (Text):
+
+ Unique product ID.
   - `manufacturer` (Text): Manufacturer name.
   - `vendor` (Link to `vendors`): Vendor supplying the product.
   - `asset_type` (Link to `asset_types`): Asset type category.
@@ -267,12 +270,27 @@ This table maintains employee records.
 
 ### Running the Inventory Management Pipeline
 
-Activate the Poetry shell and run the main script:
+Activate the Poetry shell and run the main script in one of two ways:
 
-```bash
-poetry shell
-python main.py
-```
+1. **Automatic Matching (Default)**
+
+   By default, the pipeline runs in fully automated mode. To run the pipeline:
+
+   ```bash
+   poetry shell
+   python main.py
+   ```
+
+2. **Manual Matching (Streamlit)**
+
+   If you want to manually match assets using a Streamlit app, pass the `--streamlit` argument:
+
+   ```bash
+   poetry shell
+   python main.py --streamlit
+   ```
+
+   This will launch the Streamlit app, and the pipeline will wait for you to finish the manual matching before continuing with the next steps.
 
 ### Pipeline Steps
 
@@ -296,7 +314,7 @@ python main.py
    - Launch the Streamlit app for manual matching:
 
      ```bash
-     streamlit run src/matching_streamlit_app.py
+     python main.py --streamlit
      ```
 
    - Follow the on-screen instructions to manually match assets with purchases and employees.
@@ -441,5 +459,3 @@ For any questions or inquiries, please contact:
 - **GitHub**: [Ahmet Besiroglu](https://github.com/ahmetybesiroglu)
 
 ---
-
-Thank you for exploring AssetTracker! This project showcases expertise in Python programming, API integration, data processing, and the development of comprehensive inventory management systems. AssetTracker not only automates the tedious aspects of asset management but also integrates accounting principles to provide valuable insights into asset depreciation and financial planning.

@@ -1,0 +1,18 @@
+# file_order.txt
+
+data_retrieval_freshservice.py
+data_retrieval_airtable.py
+data_processing_freshservice.py
+data_processing_headcount.py
+data_standardization.py
+laptop_matching.py
+matching_streamlit_app.py
+headcount_matching.py
+push_to_asset_types.py
+push_to_departments.py
+push_vendors.py
+push_to_products.py
+push_to_purchases.py
+push_to_assets.py
+push_to_emplyees.py
+link_tables.py
